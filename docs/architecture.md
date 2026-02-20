@@ -6,48 +6,7 @@ This document describes the technical architecture, data flow, and design decisi
 
 AIXplore Recorder is a single-window Electron application built with three source files and no external UI frameworks. The architecture follows Electron's recommended security model with strict process isolation.
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Main Process                       │
-│                   (src/main.js)                      │
-│                                                      │
-│  ┌─────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │  Tray   │  │ Settings │  │  FFmpeg Engine    │   │
-│  │ Manager │  │  Store   │  │  (trim/convert)   │   │
-│  └─────────┘  └──────────┘  └──────────────────┘   │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │            IPC Handlers                       │   │
-│  │  get-sources | save-webm | save-mp4 | ...    │   │
-│  └──────────────────────────────────────────────┘   │
-└───────────────────────┬─────────────────────────────┘
-                        │ IPC (contextBridge)
-┌───────────────────────┴─────────────────────────────┐
-│                  Preload Script                       │
-│                  (src/preload.js)                     │
-│                                                      │
-│  Exposes: window.electronAPI                         │
-│  - getSources(), saveWebmInstant(), saveAsMp4()     │
-│  - setRecordingState(), getSettings(), ...           │
-└───────────────────────┬─────────────────────────────┘
-                        │ Secure API
-┌───────────────────────┴─────────────────────────────┐
-│                 Renderer Process                     │
-│                 (src/index.html)                      │
-│                                                      │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────┐     │
-│  │  Source   │  │ Recording │  │  Trim View   │     │
-│  │  Picker  │  │   View    │  │  (editor)    │     │
-│  └──────────┘  └───────────┘  └──────────────┘     │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │         Media Pipeline                        │   │
-│  │  Screen → Canvas → MediaRecorder → Blob      │   │
-│  │  Camera → Canvas (PiP)                        │   │
-│  │  Mic/System Audio → AudioContext → Mix        │   │
-│  └──────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
-```
+![Electron Process Architecture](images/architecture-overview.png)
 
 ## Process Model
 
@@ -76,30 +35,7 @@ A single HTML file containing all UI markup, CSS styles, and JavaScript logic. M
 
 ## Recording Pipeline
 
-### Video Capture
-
-```
-desktopCapturer.getSources()
-        │
-        ▼
-getUserMedia({ chromeMediaSource: 'desktop' })
-        │
-        ▼
-  Screen Stream ──────────┐
-                           │
-getUserMedia({ video })    │
-        │                  ▼
-  Camera Stream ──→  Canvas Compositor (25fps)
-                           │
-                           ▼
-                  canvas.captureStream()
-                           │
-                           ▼
-                    MediaRecorder (VP9)
-                           │
-                           ▼
-                      Blob (WebM)
-```
+![Recording Pipeline](images/recording-pipeline.png)
 
 The canvas compositor runs at 25fps, drawing the screen capture as the base layer and overlaying the webcam feed as a circular PiP. The webcam is rendered with:
 - Circular clipping mask
@@ -107,52 +43,17 @@ The canvas compositor runs at 25fps, drawing the screen capture as the base laye
 - Purple border stroke
 - Position based on drag coordinates
 
-### Audio Pipeline
-
-```
-System Audio Track ──┐
-                      ├──→ AudioContext.createMediaStreamDestination()
-Microphone Stream ───┘              │
-        │                           ▼
-        └──→ AnalyserNode ──→ Audio Level Meter (UI)
-                                    │
-                                    ▼
-                          Combined Audio Track
-                                    │
-                                    ▼
-                     Merged into MediaRecorder stream
-```
-
 Both audio sources feed into an `AudioContext` destination node. An `AnalyserNode` taps the combined signal to drive the real-time audio level meter in the UI.
 
 ## Export Pipeline
 
-### WebM (Instant Save)
+![Export Pipelines](images/export-pipeline.png)
 
-```
-Blob → writeBlobToTemp() → fs.copyFile() → Output Directory
-```
+Three export paths are available:
 
-No re-encoding. The raw WebM blob is streamed to a temp file, then copied to the output path.
-
-### WebM (Trimmed)
-
-```
-Blob → writeBlobToTemp() → FFmpeg -ss -t -c copy → Output Directory
-```
-
-Uses FFmpeg stream copy (`-c copy`) for fast, lossless trimming.
-
-### MP4 Conversion
-
-```
-Blob → writeBlobToTemp() → FFmpeg (H.264 + AAC) → Output Directory
-```
-
-FFmpeg settings:
-- Video: `libx264`, `ultrafast` preset, CRF 28
-- Audio: `aac`, 128k bitrate
-- Flag: `+faststart` for web-optimized playback
+- **WebM Instant** — No re-encoding. The raw blob is streamed to a temp file, then copied to the output path. Fastest option.
+- **WebM Trimmed** — Uses FFmpeg stream copy (`-c copy`) for fast, lossless trimming. No re-encoding.
+- **MP4 Conversion** — Full transcode via FFmpeg: `libx264` ultrafast preset at CRF 28, `aac` at 128k, with `+faststart` for web-optimized playback.
 
 Conversion progress is reported back to the renderer via IPC for UI updates.
 
@@ -161,6 +62,12 @@ Conversion progress is reported back to the renderer via IPC for UI updates.
 - `contextIsolation: true` — Renderer cannot access Node.js globals
 - `nodeIntegration: false` — No `require()` in renderer
 - `sandbox: false` — Required for preload script to access Node.js `fs` module for temp file streaming
+- **Content Security Policy** — Restricts resource loading to `self`, `blob:`, and `mediastream:` origins
+- **Path validation** — All IPC handlers validate temp file paths (must originate from `os.tmpdir()` with `aixplore-rec-` prefix)
+- **Output path restriction** — `show-in-finder` and `open-file` only accept paths within the configured output directory
+- **Input sanitization** — FFmpeg trim parameters are validated as finite positive numbers
+- **Settings whitelist** — Only `outputDir` (string) and `autoSave` (boolean) are accepted via `set-settings`
+- **Unpredictable temp files** — Temp filenames use `crypto.randomBytes` instead of timestamps
 - All file I/O runs in the main process behind IPC handlers
 - macOS entitlements are declared in `entitlements.mac.plist` for camera, microphone, and screen capture
 
