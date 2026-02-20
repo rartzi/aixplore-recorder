@@ -166,6 +166,31 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   var recordedChunks = [], recordedBlob = null, recordedBlobUrl = null, recordingDuration = 0;
   var hiddenScreenVideo = null, hiddenCamVideo = null;
   var pipPosPercent = { x: 0.85, y: 0.85 }, pipSize = 160;
+
+  // Calculate where the video actually renders within the preview area
+  // (accounts for object-fit: contain letterboxing)
+  function getVideoRenderRect() {
+    var area = $('previewArea');
+    var ar = area.getBoundingClientRect();
+    var video = $('screenPreview');
+    var vw = video.videoWidth || 1920;
+    var vh = video.videoHeight || 1080;
+    var videoAspect = vw / vh;
+    var areaAspect = ar.width / ar.height;
+    var renderW, renderH, offsetX, offsetY;
+    if (videoAspect > areaAspect) {
+      renderW = ar.width;
+      renderH = ar.width / videoAspect;
+      offsetX = 0;
+      offsetY = (ar.height - renderH) / 2;
+    } else {
+      renderH = ar.height;
+      renderW = ar.height * videoAspect;
+      offsetX = (ar.width - renderW) / 2;
+      offsetY = 0;
+    }
+    return { x: offsetX, y: offsetY, w: renderW, h: renderH };
+  }
   var sourceRetryCount = 0;
 
   // ─── Check API ───
@@ -251,7 +276,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       var x = Math.max(0, Math.min(e.clientX - ar.left - ox, ar.width - pip.offsetWidth));
       var y = Math.max(0, Math.min(e.clientY - ar.top - oy, ar.height - pip.offsetHeight));
       pip.style.left = x + 'px'; pip.style.top = y + 'px'; pip.style.right = 'auto'; pip.style.bottom = 'auto';
-      pipPosPercent.x = (x + pip.offsetWidth/2) / ar.width; pipPosPercent.y = (y + pip.offsetHeight/2) / ar.height;
+      // Calculate position relative to the actual video rendering area (not the preview div)
+      var vr = getVideoRenderRect();
+      pipPosPercent.x = (x + pip.offsetWidth/2 - vr.x) / vr.w;
+      pipPosPercent.y = (y + pip.offsetHeight/2 - vr.y) / vr.h;
     });
     document.addEventListener('mouseup', function() { dragging = false; });
   })();
@@ -270,11 +298,14 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: selectedSource.id } }
       }).then(function(stream) {
         screenStream = stream;
-        var camP = wantCam ? navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' }, audio: false }).catch(function() { return null; }) : Promise.resolve(null);
-        var micP = wantMic ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function() { return null; }) : Promise.resolve(null);
+        var camP = wantCam ? navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' }, audio: false }).catch(function(e) { console.warn('[rec] cam failed:', e.message); return null; }) : Promise.resolve(null);
+        var micP = wantMic ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function(e) { console.warn('[rec] mic failed:', e.message); return null; }) : Promise.resolve(null);
         return Promise.all([camP, micP]);
       }).then(function(r) {
         camStream = r[0]; micStream = r[1];
+        console.log('[rec] cam:', camStream ? camStream.getVideoTracks().length + ' tracks' : 'none');
+        console.log('[rec] mic:', micStream ? micStream.getAudioTracks().length + ' tracks' : 'none');
+        console.log('[rec] screen audio:', screenStream.getAudioTracks().length + ' tracks');
         $('screenPreview').srcObject = screenStream;
         if (camStream) { var cp = $('camPreview'); cp.srcObject = camStream; cp.muted = true; cp.play().catch(function(){}); $('webcamPip').classList.remove('hidden'); }
 
@@ -288,10 +319,17 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         return hiddenScreenVideo.play().then(function() { return camReady; });
       }).then(function() {
         drawInterval = setInterval(drawFrame, 40);
-        audioCtx = new AudioContext(); var dest = audioCtx.createMediaStreamDestination();
+        audioCtx = new AudioContext();
+        // Ensure AudioContext is running before wiring audio nodes
+        return (audioCtx.state !== 'running' ? audioCtx.resume() : Promise.resolve());
+      }).then(function() {
+        console.log('[rec] AudioContext state:', audioCtx.state);
+        var dest = audioCtx.createMediaStreamDestination();
         analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
-        if (screenStream.getAudioTracks().length > 0) { var s = audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())); s.connect(dest); s.connect(analyser); }
-        if (micStream && micStream.getAudioTracks().length > 0) { var s2 = audioCtx.createMediaStreamSource(micStream); s2.connect(dest); s2.connect(analyser); }
+        var audioConnected = 0;
+        if (screenStream.getAudioTracks().length > 0) { var s = audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())); s.connect(dest); s.connect(analyser); audioConnected++; console.log('[rec] connected system audio'); }
+        if (micStream && micStream.getAudioTracks().length > 0) { var s2 = audioCtx.createMediaStreamSource(micStream); s2.connect(dest); s2.connect(analyser); audioConnected++; console.log('[rec] connected mic audio'); }
+        if (audioConnected === 0) { console.warn('[rec] WARNING: no audio sources connected!'); }
 
         var canvasStream = compositeCanvas.captureStream(25);
         var finalStream = new MediaStream(canvasStream.getVideoTracks().concat(dest.stream.getAudioTracks()));
@@ -321,14 +359,19 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     var cw = compositeCanvas.width, ch = compositeCanvas.height;
     compositeCtx.drawImage(hiddenScreenVideo, 0, 0, cw, ch);
     if (hiddenCamVideo && hiddenCamVideo.readyState >= 2) {
-      var sf = cw / 960, r = Math.max((pipSize/320)*80*sf, 40);
-      var cx = pipPosPercent.x * cw, cy = pipPosPercent.y * ch;
+      // Size: match the PiP's proportion of the video as seen in the preview
+      var vr = getVideoRenderRect();
+      var r = Math.max((pipSize / vr.w) * cw / 2, 40);
+      // Position: clamp to canvas bounds so circle stays visible
+      var cx = Math.max(r, Math.min(pipPosPercent.x * cw, cw - r));
+      var cy = Math.max(r, Math.min(pipPosPercent.y * ch, ch - r));
       compositeCtx.save(); compositeCtx.beginPath(); compositeCtx.arc(cx, cy, r, 0, Math.PI*2); compositeCtx.clip();
       var vw = hiddenCamVideo.videoWidth||320, vh = hiddenCamVideo.videoHeight||320, side = Math.min(vw,vh);
       compositeCtx.translate(cx, cy); compositeCtx.scale(-1, 1);
       compositeCtx.drawImage(hiddenCamVideo, (vw-side)/2, (vh-side)/2, side, side, -r, -r, r*2, r*2);
       compositeCtx.restore();
-      compositeCtx.beginPath(); compositeCtx.arc(cx, cy, r, 0, Math.PI*2); compositeCtx.lineWidth = 3*sf; compositeCtx.strokeStyle = '#6c5ce7'; compositeCtx.stroke();
+      var borderSf = cw / vr.w;
+      compositeCtx.beginPath(); compositeCtx.arc(cx, cy, r, 0, Math.PI*2); compositeCtx.lineWidth = 3*borderSf; compositeCtx.strokeStyle = '#6c5ce7'; compositeCtx.stroke();
     }
   }
 

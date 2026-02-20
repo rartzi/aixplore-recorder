@@ -44,10 +44,12 @@ async function createWindow() {
     try {
       const sp = require('electron').systemPreferences;
       if (sp.askForMediaAccess) {
-        await sp.askForMediaAccess('camera').catch(() => {});
-        await sp.askForMediaAccess('microphone').catch(() => {});
+        const camOk = await sp.askForMediaAccess('camera').catch(() => false);
+        const micOk = await sp.askForMediaAccess('microphone').catch(() => false);
+        console.log('[main] camera permission:', camOk);
+        console.log('[main] microphone permission:', micOk);
       }
-    } catch (e) {}
+    } catch (e) { console.log('[main] permission check error:', e.message); }
   }
   // Trigger screen recording permission prompt early
   try {
