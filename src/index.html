@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AIXplore Recorder</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f14; --surface: #1a1a24; --surface2: #24243a; --border: #2e2e48;
+  --text: #e8e8f0; --dim: #8888a8; --accent: #6c5ce7; --accent-h: #7c6cf7;
+  --red: #ff4757; --green: #2ed573; --yellow: #ffa502;
+  --radius: 12px; --radius-sm: 8px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; user-select: none; }
+.titlebar { height: 38px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--dim); -webkit-app-region: drag; }
+.app { -webkit-app-region: no-drag; display: flex; flex-direction: column; height: calc(100vh - 38px); padding: 0 24px 24px; gap: 12px; }
+.source-picker { flex: 1; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.source-picker h2 { font-size: 20px; font-weight: 600; }
+.sub { color: var(--dim); font-size: 14px; }
+.source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; overflow-y: auto; flex: 1; min-height: 80px; }
+.source-card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); padding: 10px; cursor: pointer; transition: all 0.2s; }
+.source-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.source-card.selected { border-color: var(--accent); background: var(--surface2); }
+.source-card img { width: 100%; border-radius: var(--radius-sm); aspect-ratio: 16/9; object-fit: cover; background: #000; }
+.source-card span { display: block; margin-top: 8px; font-size: 13px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 0; }
+.setting-group { display: flex; align-items: center; gap: 8px; }
+.setting-group label { font-size: 13px; color: var(--dim); }
+.toggle { position: relative; width: 40px; height: 22px; background: var(--border); border-radius: 11px; cursor: pointer; border: none; }
+.toggle.active { background: var(--accent); }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+.toggle.active::after { transform: translateX(18px); }
+select.styled { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; }
+.output-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; flex-wrap: wrap; }
+.path-display { font-size: 12px; color: var(--dim); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 28px; border-radius: var(--radius-sm); border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-h); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-ghost { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--dim); }
+.btn-yellow { background: var(--yellow); color: #000; font-weight: 700; }
+.btn-green { background: var(--green); color: #000; font-weight: 700; }
+.btn-tiny { font-size: 12px; padding: 4px 10px; background: var(--surface2); color: var(--dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.btn-tiny:hover { color: var(--accent); border-color: var(--accent); }
+.error-msg { color: var(--red); font-size: 13px; padding: 8px; background: rgba(255,71,87,0.1); border-radius: 6px; }
+.recording-view { flex: 1; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.preview-area { flex: 1; position: relative; background: #000; border-radius: var(--radius); overflow: hidden; }
+.preview-area video { width: 100%; height: 100%; object-fit: contain; }
+.webcam-pip { position: absolute; bottom: 16px; right: 16px; width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 3px solid var(--accent); cursor: grab; background: #000; z-index: 10; }
+.webcam-pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.control-bar { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 14px 20px; background: var(--surface); border-radius: 0 0 var(--radius) var(--radius); }
+.rec-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--red); animation: pulse 1s ease-in-out infinite; }
+.rec-dot.paused { animation: none; background: var(--yellow); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 90px; text-align: center; }
+.audio-meter { width: 80px; height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden; }
+.audio-meter-fill { height: 100%; background: var(--green); width: 0%; border-radius: 5px; }
+.pip-sizes { display: flex; gap: 6px; }
+.pip-size-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface2); color: var(--dim); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.pip-size-btn.active { border-color: var(--accent); color: var(--accent); }
+.trim-view { flex: 1; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.trim-preview { flex: 1; background: #000; border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.trim-preview video { max-width: 100%; max-height: 100%; }
+.trim-sliders { display: flex; gap: 16px; align-items: center; }
+.trim-sliders label { font-size: 13px; color: var(--dim); min-width: 40px; }
+.trim-sliders input[type="range"] { flex: 1; }
+.time-val { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 50px; }
+.trim-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.trim-buttons .btn { padding: 10px 20px; font-size: 14px; }
+.save-banner { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: var(--surface2); border-top: 1px solid var(--accent); padding: 12px 20px; display: flex; align-items: center; gap: 12px; -webkit-app-region: no-drag; }
+.save-banner .path { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; }
+.banner-btn:hover { border-color: var(--accent); color: var(--accent); }
+.overlay { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(0,0,0,0.7); }
+.spinner { width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.countdown-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; font-size: 120px; font-weight: 700; color: var(--accent); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="titlebar">AIXplore Recorder</div>
+<div class="app">
+  <div id="viewPicker" class="source-picker">
+    <h2>Choose a source to record</h2>
+    <p class="sub">Select a screen or window, configure settings, then hit Start.</p>
+    <div id="errorBox" class="error-msg hidden"></div>
+    <div id="sourceGrid" class="source-grid"></div>
+    <div class="settings-row">
+      <div class="setting-group"><label>Webcam</label><button id="toggleCam" class="toggle active"></button></div>
+      <div class="setting-group"><label>Mic</label><button id="toggleMic" class="toggle active"></button></div>
+      <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle"></button></div>
+      <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
+    </div>
+    <div class="output-row">
+      <label style="font-size:13px;color:var(--dim)">Save to:</label>
+      <span id="outputPath" class="path-display">Loading...</span>
+      <button id="btnChangeDir" class="btn-tiny">Change</button>
+    </div>
+    <div style="display:flex;gap:10px;align-self:center">
+      <button id="btnRefresh" class="btn btn-ghost" style="padding:8px 16px;font-size:13px;">Refresh</button>
+      <button id="btnStart" class="btn btn-primary" disabled>Start Recording</button>
+    </div>
+  </div>
+  <div id="viewRecording" class="recording-view hidden">
+    <div class="preview-area" id="previewArea">
+      <video id="screenPreview" autoplay muted playsinline></video>
+      <div id="webcamPip" class="webcam-pip hidden"><video id="camPreview" autoplay muted playsinline></video></div>
+    </div>
+    <div class="control-bar">
+      <div id="recDot" class="rec-dot"></div>
+      <span id="timer" class="timer">00:00</span>
+      <div class="audio-meter"><div id="meterFill" class="audio-meter-fill"></div></div>
+      <div class="pip-sizes">
+        <button class="pip-size-btn" data-size="100">S</button>
+        <button class="pip-size-btn active" data-size="160">M</button>
+        <button class="pip-size-btn" data-size="220">L</button>
+      </div>
+      <button id="btnPause" class="btn btn-yellow" style="padding:10px 24px;">PAUSE</button>
+      <button id="btnStop" class="btn btn-danger" style="padding:10px 24px;">STOP</button>
+    </div>
+  </div>
+  <div id="viewTrim" class="trim-view hidden">
+    <div class="trim-preview"><video id="trimVideo" controls playsinline></video></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="trim-sliders"><label>Start</label><input type="range" id="trimStart" min="0" max="100" step="0.1" value="0" /><span id="trimStartVal" class="time-val">0:00</span></div>
+      <div class="trim-sliders"><label>End</label><input type="range" id="trimEnd" min="0" max="100" step="0.1" value="100" /><span id="trimEndVal" class="time-val">0:00</span></div>
+      <div class="trim-buttons">
+        <button class="btn btn-ghost" id="btnDiscard">Discard</button>
+        <button class="btn btn-ghost" id="btnReRecord">Re-record</button>
+        <button class="btn btn-green" id="btnSaveFull">Save Full (instant)</button>
+        <button class="btn btn-primary" id="btnSaveTrim">Save Trimmed</button>
+        <button class="btn btn-ghost" id="btnSaveMP4">Save as MP4</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="saveBanner" class="save-banner hidden">
+  <span style="color:var(--green);">Saved:</span>
+  <span id="savedPath" class="path"></span>
+  <button class="banner-btn" id="btnFinder">Show in Finder</button>
+  <button class="banner-btn" id="btnPlay">Play</button>
+  <button class="banner-btn" id="btnDismiss">Dismiss</button>
+</div>
+<div id="convOverlay" class="overlay hidden"><div class="spinner"></div><p id="convText">Processing...</p></div>
+<div id="countdownOverlay" class="countdown-overlay hidden"></div>
+
+<script>
+(function() {
+  'use strict';
+  var $ = function(id) { return document.getElementById(id); };
+  function fmtTime(s) { return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0'); }
+  function showView(id) { ['viewPicker','viewRecording','viewTrim'].forEach(function(v) { $(v).classList.toggle('hidden', v !== id); }); }
+  function showError(msg) { $('errorBox').textContent = msg; $('errorBox').classList.remove('hidden'); }
+  function showConv(msg) { $('convText').textContent = msg; $('convOverlay').classList.remove('hidden'); }
+  function hideConv() { $('convOverlay').classList.add('hidden'); }
+
+  // ─── State ───
+  var selectedSource = null, mediaRecorder = null;
+  var screenStream = null, camStream = null, micStream = null;
+  var compositeCanvas = null, compositeCtx = null, drawInterval = null;
+  var startTime = 0, timerInterval = null, isPaused = false, pausedElapsed = 0;
+  var audioCtx = null, analyser = null, lastSavedPath = '';
+  var recordedChunks = [], recordedBlob = null, recordedBlobUrl = null, recordingDuration = 0;
+  var hiddenScreenVideo = null, hiddenCamVideo = null;
+  var pipPosPercent = { x: 0.85, y: 0.85 }, pipSize = 160;
+  var sourceRetryCount = 0;
+
+  // ─── Check API ───
+  if (!window.electronAPI) {
+    document.body.innerHTML = '<div style="padding:40px;color:#ff4757;font-size:18px;">FATAL: electronAPI not loaded.<br>The preload script failed. Check terminal for errors.</div>';
+    return;
+  }
+  console.log('[renderer] electronAPI available');
+
+  // ─── Toggles ───
+  document.querySelectorAll('.toggle').forEach(function(btn) { btn.addEventListener('click', function() { btn.classList.toggle('active'); }); });
+
+  // ─── Init ───
+  window.electronAPI.getSettings().then(function(settings) {
+    $('outputPath').textContent = settings.outputDir;
+    return loadSources();
+  }).catch(function(err) { console.error('init error:', err); showError('Init failed: ' + err.message); });
+
+  function loadSources() {
+    var grid = $('sourceGrid');
+    grid.innerHTML = '<p style="color:var(--dim);padding:20px;">Loading screens and windows...</p>';
+    return window.electronAPI.getSources().then(function(sources) {
+      console.log('Got ' + sources.length + ' sources');
+      if (!sources || sources.length === 0) {
+        if (sourceRetryCount < 3) {
+          sourceRetryCount++;
+          var delay = sourceRetryCount * 2000;
+          grid.innerHTML = '<p style="color:var(--dim);padding:20px;">Waiting for screen recording permission... (retry ' + sourceRetryCount + '/3)</p>';
+          return new Promise(function(resolve) { setTimeout(function() { resolve(loadSources()); }, delay); });
+        }
+        grid.innerHTML = '<p style="color:var(--dim);padding:20px;">No screens found.<br>Open <b>System Settings &gt; Privacy &amp; Security &gt; Screen Recording</b>, enable this app, then click Refresh.</p>';
+        return;
+      }
+      sourceRetryCount = 0;
+      grid.innerHTML = '';
+      sources.forEach(function(s) {
+        var card = document.createElement('div');
+        card.className = 'source-card';
+        var img = document.createElement('img'); img.src = s.thumbnail; card.appendChild(img);
+        var lbl = document.createElement('span'); lbl.textContent = s.name; card.appendChild(lbl);
+        card.addEventListener('click', function() {
+          document.querySelectorAll('.source-card').forEach(function(c) { c.classList.remove('selected'); });
+          card.classList.add('selected');
+          selectedSource = s;
+          $('btnStart').disabled = false;
+        });
+        grid.appendChild(card);
+      });
+    }).catch(function(err) { console.error('loadSources error:', err); grid.innerHTML = ''; showError('Could not load sources: ' + err.message); });
+  }
+
+  // ─── Buttons ───
+  $('btnRefresh').addEventListener('click', function() { sourceRetryCount = 0; loadSources(); });
+  $('btnChangeDir').addEventListener('click', function() { window.electronAPI.chooseOutputDir().then(function(d) { if (d) $('outputPath').textContent = d; }); });
+  $('btnStart').addEventListener('click', function() { startRecording(); });
+  $('btnPause').addEventListener('click', function() { togglePause(); });
+  $('btnStop').addEventListener('click', function() { stopRecording(); });
+  $('btnDiscard').addEventListener('click', function() { discardRecording(); });
+  $('btnReRecord').addEventListener('click', function() { reRecord(); });
+  $('btnSaveFull').addEventListener('click', function() { saveInstant(); });
+  $('btnSaveTrim').addEventListener('click', function() { saveTrimmed(); });
+  $('btnSaveMP4').addEventListener('click', function() { saveMP4(); });
+  $('btnFinder').addEventListener('click', function() { if (lastSavedPath) window.electronAPI.showInFinder(lastSavedPath); });
+  $('btnPlay').addEventListener('click', function() { if (lastSavedPath) window.electronAPI.openFile(lastSavedPath); });
+  $('btnDismiss').addEventListener('click', function() { $('saveBanner').classList.add('hidden'); });
+  $('trimStart').addEventListener('input', function() { $('trimStartVal').textContent = fmtTime(parseFloat(this.value)); });
+  $('trimEnd').addEventListener('input', function() { $('trimEndVal').textContent = fmtTime(parseFloat(this.value)); });
+
+  document.querySelectorAll('.pip-size-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.pip-size-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active'); pipSize = parseInt(btn.dataset.size);
+      $('webcamPip').style.width = pipSize + 'px'; $('webcamPip').style.height = pipSize + 'px';
+    });
+  });
+
+  // ─── PiP drag ───
+  (function() {
+    var pip = $('webcamPip'), area = $('previewArea'), dragging = false, ox = 0, oy = 0;
+    pip.addEventListener('mousedown', function(e) { dragging = true; var r = pip.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top; e.preventDefault(); });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return; var ar = area.getBoundingClientRect();
+      var x = Math.max(0, Math.min(e.clientX - ar.left - ox, ar.width - pip.offsetWidth));
+      var y = Math.max(0, Math.min(e.clientY - ar.top - oy, ar.height - pip.offsetHeight));
+      pip.style.left = x + 'px'; pip.style.top = y + 'px'; pip.style.right = 'auto'; pip.style.bottom = 'auto';
+      pipPosPercent.x = (x + pip.offsetWidth/2) / ar.width; pipPosPercent.y = (y + pip.offsetHeight/2) / ar.height;
+    });
+    document.addEventListener('mouseup', function() { dragging = false; });
+  })();
+
+  // ═══════ RECORDING ═══════
+  function startRecording() {
+    $('errorBox').classList.add('hidden');
+    var countdownSec = parseInt($('countdownSel').value);
+    var doStart = function() {
+      var wantCam = $('toggleCam').classList.contains('active');
+      var wantMic = $('toggleMic').classList.contains('active');
+      var wantSys = $('toggleSys').classList.contains('active');
+
+      navigator.mediaDevices.getUserMedia({
+        audio: wantSys ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: selectedSource.id } }
+      }).then(function(stream) {
+        screenStream = stream;
+        var camP = wantCam ? navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' }, audio: false }).catch(function() { return null; }) : Promise.resolve(null);
+        var micP = wantMic ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function() { return null; }) : Promise.resolve(null);
+        return Promise.all([camP, micP]);
+      }).then(function(r) {
+        camStream = r[0]; micStream = r[1];
+        $('screenPreview').srcObject = screenStream;
+        if (camStream) { var cp = $('camPreview'); cp.srcObject = camStream; cp.muted = true; cp.play().catch(function(){}); $('webcamPip').classList.remove('hidden'); }
+
+        var track = screenStream.getVideoTracks()[0], ts = track.getSettings();
+        var cw = ts.width || 1920, ch = ts.height || 1080;
+        compositeCanvas = document.createElement('canvas'); compositeCanvas.width = cw; compositeCanvas.height = ch;
+        compositeCtx = compositeCanvas.getContext('2d');
+        hiddenScreenVideo = makeHiddenVideo(); hiddenScreenVideo.srcObject = screenStream; hiddenScreenVideo.muted = true;
+        var camReady = Promise.resolve();
+        if (camStream) { hiddenCamVideo = makeHiddenVideo(); hiddenCamVideo.srcObject = camStream; hiddenCamVideo.muted = true; camReady = hiddenCamVideo.play().catch(function(){}); }
+        return hiddenScreenVideo.play().then(function() { return camReady; });
+      }).then(function() {
+        drawInterval = setInterval(drawFrame, 40);
+        audioCtx = new AudioContext(); var dest = audioCtx.createMediaStreamDestination();
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+        if (screenStream.getAudioTracks().length > 0) { var s = audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())); s.connect(dest); s.connect(analyser); }
+        if (micStream && micStream.getAudioTracks().length > 0) { var s2 = audioCtx.createMediaStreamSource(micStream); s2.connect(dest); s2.connect(analyser); }
+
+        var canvasStream = compositeCanvas.captureStream(25);
+        var finalStream = new MediaStream(canvasStream.getVideoTracks().concat(dest.stream.getAudioTracks()));
+        recordedChunks = []; recordedBlob = null; if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; }
+
+        mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: 3000000 });
+        mediaRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = function() {
+          recordingDuration = isPaused ? pausedElapsed / 1000 : (Date.now() - startTime) / 1000;
+          recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
+          recordedBlobUrl = URL.createObjectURL(recordedBlob);
+          cleanupRecording(); showTrimView();
+        };
+        mediaRecorder.start(1000);
+        showView('viewRecording'); isPaused = false; pausedElapsed = 0; startTime = Date.now();
+        updateTimer(); timerInterval = setInterval(updateTimer, 250); startAudioMeter();
+        window.electronAPI.setRecordingState(true);
+      }).catch(function(err) { showError('Recording failed: ' + err.message); console.error(err); });
+    };
+    if (countdownSec > 0) runCountdown(countdownSec, doStart); else doStart();
+  }
+
+  function makeHiddenVideo() { var v = document.createElement('video'); v.setAttribute('playsinline',''); v.style.cssText = 'position:fixed;top:-9999px;width:1px;height:1px;opacity:0;'; document.body.appendChild(v); return v; }
+
+  function drawFrame() {
+    if (!compositeCtx || !hiddenScreenVideo) return;
+    var cw = compositeCanvas.width, ch = compositeCanvas.height;
+    compositeCtx.drawImage(hiddenScreenVideo, 0, 0, cw, ch);
+    if (hiddenCamVideo && hiddenCamVideo.readyState >= 2) {
+      var sf = cw / 960, r = Math.max((pipSize/320)*80*sf, 40);
+      var cx = pipPosPercent.x * cw, cy = pipPosPercent.y * ch;
+      compositeCtx.save(); compositeCtx.beginPath(); compositeCtx.arc(cx, cy, r, 0, Math.PI*2); compositeCtx.clip();
+      var vw = hiddenCamVideo.videoWidth||320, vh = hiddenCamVideo.videoHeight||320, side = Math.min(vw,vh);
+      compositeCtx.translate(cx, cy); compositeCtx.scale(-1, 1);
+      compositeCtx.drawImage(hiddenCamVideo, (vw-side)/2, (vh-side)/2, side, side, -r, -r, r*2, r*2);
+      compositeCtx.restore();
+      compositeCtx.beginPath(); compositeCtx.arc(cx, cy, r, 0, Math.PI*2); compositeCtx.lineWidth = 3*sf; compositeCtx.strokeStyle = '#6c5ce7'; compositeCtx.stroke();
+    }
+  }
+
+  function togglePause() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    if (isPaused) { mediaRecorder.resume(); isPaused = false; startTime = Date.now()-pausedElapsed; $('btnPause').textContent = 'PAUSE'; $('recDot').classList.remove('paused'); }
+    else { mediaRecorder.pause(); isPaused = true; pausedElapsed = Date.now()-startTime; $('btnPause').textContent = 'RESUME'; $('recDot').classList.add('paused'); }
+  }
+  function stopRecording() { if (!mediaRecorder || mediaRecorder.state === 'inactive') return; mediaRecorder.stop(); window.electronAPI.setRecordingState(false); }
+
+  function cleanupRecording() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (drawInterval) { clearInterval(drawInterval); drawInterval = null; }
+    if (hiddenScreenVideo) { hiddenScreenVideo.pause(); hiddenScreenVideo.srcObject = null; hiddenScreenVideo.remove(); hiddenScreenVideo = null; }
+    if (hiddenCamVideo) { hiddenCamVideo.pause(); hiddenCamVideo.srcObject = null; hiddenCamVideo.remove(); hiddenCamVideo = null; }
+    if (compositeCtx && compositeCanvas) compositeCtx.clearRect(0, 0, compositeCanvas.width, compositeCanvas.height);
+    [screenStream, camStream, micStream].forEach(function(s) { if (s) s.getTracks().forEach(function(t) { t.stop(); }); });
+    screenStream = camStream = micStream = null;
+    if (audioCtx) { audioCtx.close().catch(function(){}); audioCtx = null; analyser = null; }
+    $('webcamPip').classList.add('hidden'); $('screenPreview').srcObject = null; $('camPreview').srcObject = null;
+  }
+  function updateTimer() { if (isPaused) return; var sec = Math.floor((Date.now()-startTime)/1000); $('timer').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0'); }
+  function startAudioMeter() { if (!analyser) return; var data = new Uint8Array(analyser.frequencyBinCount); (function tick() { if (!analyser) return; analyser.getByteFrequencyData(data); var sum=0; for(var i=0;i<data.length;i++) sum+=data[i]; $('meterFill').style.width = Math.min(100,(sum/data.length/128)*100)+'%'; requestAnimationFrame(tick); })(); }
+  function runCountdown(sec, cb) { var el = $('countdownOverlay'); el.classList.remove('hidden'); var n = sec; el.textContent = n; var iv = setInterval(function() { if(--n<=0){clearInterval(iv);el.classList.add('hidden');cb();} else el.textContent=n; }, 1000); }
+
+  // ═══════ TRIM ═══════
+  function showTrimView() {
+    showView('viewTrim'); var tv = $('trimVideo'); tv.src = recordedBlobUrl;
+    tv.onloadedmetadata = function() { var dur = tv.duration; if (!isFinite(dur)||dur<=0) dur = recordingDuration;
+      $('trimEnd').max = dur; $('trimEnd').value = dur; $('trimStart').max = dur; $('trimStart').value = 0;
+      $('trimEndVal').textContent = fmtTime(dur); $('trimStartVal').textContent = '0:00'; };
+  }
+
+  // ═══════ SAVE ═══════
+  function writeBlobToTemp() {
+    showConv('Preparing file...'); window.electronAPI.initTempFile();
+    var reader = recordedBlob.stream().getReader();
+    function pump() { return reader.read().then(function(r) { if (r.done) return window.electronAPI.finalizeTempFile(); return window.electronAPI.writeChunk(r.value).then(pump); }); }
+    return pump();
+  }
+  function saveInstant() { writeBlobToTemp().then(function() { return window.electronAPI.saveWebmInstant(); }).then(function(p) { hideConv(); showBanner(p); cleanupAfterSave(); }).catch(function(e) { hideConv(); alert('Save failed: '+e.message); }); }
+  function saveTrimmed() {
+    var s = parseFloat($('trimStart').value), e = parseFloat($('trimEnd').value);
+    if (e<=s) { alert('End must be after start'); return; }
+    writeBlobToTemp().then(function() { showConv('Trimming...'); return window.electronAPI.saveWebmTrimmed({startSec:s,endSec:e}); }).then(function(p) { hideConv(); showBanner(p); cleanupAfterSave(); }).catch(function(err) { hideConv(); alert('Trim failed: '+err.message); });
+  }
+  function saveMP4() {
+    var s = parseFloat($('trimStart').value), e = parseFloat($('trimEnd').value);
+    var maxD = parseFloat($('trimEnd').max), trimmed = s > 0.5 || e < (maxD - 0.5);
+    writeBlobToTemp().then(function() { showConv('Converting to MP4...'); return window.electronAPI.saveAsMp4({startSec:s,endSec:e,trimmed:trimmed}); }).then(function(p) { hideConv(); showBanner(p); cleanupAfterSave(); }).catch(function(err) { hideConv(); alert('MP4 failed: '+err.message); });
+  }
+  function cleanupAfterSave() { recordedChunks = []; recordedBlob = null; if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; } $('trimVideo').src = ''; showView('viewPicker'); }
+  function discardRecording() { recordedChunks = []; recordedBlob = null; if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; } $('trimVideo').src = ''; window.electronAPI.discardTemp(); showView('viewPicker'); }
+  function reRecord() { discardRecording(); if (selectedSource) setTimeout(function() { startRecording(); }, 300); }
+  function showBanner(p) { lastSavedPath = p; $('savedPath').textContent = p; $('saveBanner').classList.remove('hidden'); }
+
+  window.electronAPI.onConversionStatus(function(s) { if(s.status==='done') hideConv(); else if(s.status==='error'){hideConv();alert('Error: '+s.error);} else if(s.status==='converting') $('convText').textContent='Converting to MP4...'; else if(s.status==='trimming') $('convText').textContent='Trimming...'; });
+  window.electronAPI.onSettingsUpdated(function(s) { $('outputPath').textContent = s.outputDir; });
+  window.electronAPI.onToggleRecord(function() { if (selectedSource && !$('viewPicker').classList.contains('hidden')) startRecording(); });
+  window.electronAPI.onTogglePause(function() { togglePause(); });
+  window.electronAPI.onStop(function() { stopRecording(); });
+})();
+</script>
+</body>
+</html>
