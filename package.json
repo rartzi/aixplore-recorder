@@ -2,6 +2,7 @@
   "name": "aixplore-recorder",
   "version": "3.0.0",
   "description": "AIXplore Screen + Camera Recorder",
+  "author": "AIXplore Ronen Artzi",
   "main": "src/main.js",
   "scripts": { "start": "electron .", "build": "electron-builder --mac" },
   "devDependencies": { "electron": "^35.0.0", "electron-builder": "^26.0.0" },

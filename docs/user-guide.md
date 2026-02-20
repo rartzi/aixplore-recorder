@@ -30,6 +30,8 @@ This guide covers everything you need to know to record, edit, and export screen
 
 ## Installation
 
+### Running from Source (Development)
+
 ```bash
 git clone https://github.com/rartzi/aixplore-recorder.git
 cd aixplore-recorder
@@ -37,13 +39,34 @@ npm install
 npm start
 ```
 
-To build a distributable `.dmg`:
+### Building for Distribution
+
+To build a distributable macOS application:
 
 ```bash
 npm run build
 ```
 
-The output will be in the `dist/` directory.
+This uses `electron-builder` to produce the following artifacts in the `dist/` directory:
+
+| File | Description |
+|---|---|
+| `dist/mac-arm64/AIXplore Recorder.app` | Standalone application bundle |
+| `dist/AIXplore Recorder-<version>-arm64.dmg` | Disk image for distribution |
+| `dist/AIXplore Recorder-<version>-arm64-mac.zip` | Zipped app for direct sharing |
+
+To install the built app, open the `.dmg` and drag **AIXplore Recorder** to your Applications folder, or run the `.app` directly.
+
+### Code Signing & Notarization
+
+By default, the build produces an **ad-hoc signed** application. macOS Gatekeeper will show a warning when opening it for the first time. To bypass this, right-click the app and select **Open**.
+
+For proper distribution (no Gatekeeper warnings), you need:
+
+1. An **Apple Developer ID** certificate — configure it in the `build.mac` section of `package.json` or via the `CSC_LINK` / `CSC_KEY_PASSWORD` environment variables
+2. **Notarization** — add `notarize` options to the `build.mac` config or use `electron-builder`'s `afterSign` hook with `@electron/notarize`
+
+See the [electron-builder code signing docs](https://www.electron.build/code-signing) for full details.
 
 ## First Launch & Permissions
 
