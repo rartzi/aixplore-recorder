@@ -51,7 +51,7 @@ AIXplore Recorder is a lightweight, native desktop application for recording you
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/aixplore-recorder.git
+git clone https://github.com/rartzi/aixplore-recorder.git
 cd aixplore-recorder
 
 # Install dependencies

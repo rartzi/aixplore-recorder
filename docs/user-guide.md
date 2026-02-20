@@ -31,7 +31,7 @@ This guide covers everything you need to know to record, edit, and export screen
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/aixplore-recorder.git
+git clone https://github.com/rartzi/aixplore-recorder.git
 cd aixplore-recorder
 npm install
 npm start
