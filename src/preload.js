@@ -13,6 +13,7 @@ try {
   contextBridge.exposeInMainWorld('electronAPI', {
     getSources: function() { return ipcRenderer.invoke('get-sources'); },
     setRecordingState: function(on) { ipcRenderer.send('set-recording-state', on); },
+    setSelectedSource: function(id) { ipcRenderer.send('set-selected-source', id); },
     getSettings: function() { return ipcRenderer.invoke('get-settings'); },
     setSettings: function(s) { return ipcRenderer.invoke('set-settings', s); },
     chooseOutputDir: function() { return ipcRenderer.invoke('choose-output-dir'); },

@@ -6,7 +6,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
-let mainWindow, tray, blinkInterval;
+let mainWindow, tray, blinkInterval, selectedSourceId = null;
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
   autoSave: false
@@ -80,6 +80,19 @@ async function createWindow() {
     });
   });
 
+  // ─── Display Media Handler: enables system audio via loopback on macOS ───
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+      const source = (selectedSourceId && sources.find(s => s.id === selectedSourceId)) || sources[0];
+      console.log('[main] displayMedia handler: source=' + source.name + ', audio=loopback');
+      callback({ video: source, audio: 'loopback' });
+    } catch (err) {
+      console.error('[main] displayMedia handler error:', err);
+      callback({});
+    }
+  });
+
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
@@ -110,6 +123,7 @@ ipcMain.handle('get-sources', async () => {
 });
 
 ipcMain.on('set-recording-state', (_, on) => setTrayRec(on));
+ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───
 ipcMain.handle('get-settings', () => settings);

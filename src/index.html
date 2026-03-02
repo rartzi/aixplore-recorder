@@ -91,7 +91,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     <div class="settings-row">
       <div class="setting-group"><label>Webcam</label><button id="toggleCam" class="toggle active"></button></div>
       <div class="setting-group"><label>Mic</label><button id="toggleMic" class="toggle active"></button></div>
-      <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle"></button></div>
+      <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle active"></button></div>
       <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
     </div>
     <div class="output-row">
@@ -293,13 +293,15 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       var wantMic = $('toggleMic').classList.contains('active');
       var wantSys = $('toggleSys').classList.contains('active');
 
-      navigator.mediaDevices.getUserMedia({
-        audio: wantSys ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
-        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: selectedSource.id } }
+      // Tell main process which source to use, then use getDisplayMedia for native loopback audio
+      window.electronAPI.setSelectedSource(selectedSource.id);
+      navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: wantSys
       }).then(function(stream) {
         screenStream = stream;
         var camP = wantCam ? navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 320, facingMode: 'user' }, audio: false }).catch(function(e) { console.warn('[rec] cam failed:', e.message); return null; }) : Promise.resolve(null);
-        var micP = wantMic ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function(e) { console.warn('[rec] mic failed:', e.message); return null; }) : Promise.resolve(null);
+        var micP = wantMic ? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false }).catch(function(e) { console.warn('[rec] mic failed:', e.message); return null; }) : Promise.resolve(null);
         return Promise.all([camP, micP]);
       }).then(function(r) {
         camStream = r[0]; micStream = r[1];
@@ -327,7 +329,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         var dest = audioCtx.createMediaStreamDestination();
         analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
         var audioConnected = 0;
-        if (screenStream.getAudioTracks().length > 0) { var s = audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())); s.connect(dest); s.connect(analyser); audioConnected++; console.log('[rec] connected system audio'); }
+        if (screenStream.getAudioTracks().length > 0) { var s = audioCtx.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())); s.connect(dest); s.connect(analyser); audioConnected++; console.log('[rec] connected system audio (loopback)'); }
         if (micStream && micStream.getAudioTracks().length > 0) { var s2 = audioCtx.createMediaStreamSource(micStream); s2.connect(dest); s2.connect(analyser); audioConnected++; console.log('[rec] connected mic audio'); }
         if (audioConnected === 0) { console.warn('[rec] WARNING: no audio sources connected!'); }
 
