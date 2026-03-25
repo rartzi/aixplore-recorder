@@ -18,6 +18,13 @@
     "productName": "AIXplore Recorder",
     "mac": {
       "category": "public.app-category.productivity",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
       "extendInfo": {
@@ -25,6 +32,13 @@
         "NSMicrophoneUsageDescription": "Microphone access for audio recording",
         "NSScreenCaptureUsageDescription": "Screen capture for recording"
       }
+    },
+    "dmg": {
+      "title": "AIXplore Recorder",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     }
   }
 }
