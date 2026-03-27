@@ -9,8 +9,31 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
-  autoSave: false
+  autoSave: false,
+  quality: 'high',    // high=6Mbps, medium=3Mbps, low=1.5Mbps
+  fps: 30,
+  countdown: 3,
+  audioDeviceId: null,
+  theme: 'system'
 };
+
+// ─── Persistence paths (set in whenReady) ───
+let userData = null;
+function getHistoryPath() { return path.join(userData, 'history.json'); }
+function getSettingsPath() { return path.join(userData, 'settings.json'); }
+
+function loadPersistedSettings() {
+  try {
+    if (fs.existsSync(getSettingsPath())) {
+      const saved = JSON.parse(fs.readFileSync(getSettingsPath(), 'utf8'));
+      Object.assign(settings, saved);
+    }
+  } catch (e) { console.log('[main] settings load error:', e.message); }
+}
+
+function savePersistedSettings() {
+  try { fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2)); } catch (e) {}
+}
 
 function ts(ext) {
   const d = new Date();
@@ -30,6 +53,13 @@ function isValidOutputPath(p) {
   if (!p || typeof p !== 'string') return false;
   const resolved = path.resolve(p);
   return resolved.startsWith(settings.outputDir);
+}
+
+// Validate a history file path: must be a known AIXplore recording filename
+function isValidHistoryFilePath(p) {
+  if (!p || typeof p !== 'string') return false;
+  const base = path.basename(p);
+  return /^AIXplore-\d{4}-\d{2}-\d{2}_\d{2}h\d{2}m\d{2}s\.(webm|mp4)$/.test(base);
 }
 
 function sanitizeNumber(val) {
@@ -130,11 +160,22 @@ ipcMain.handle('get-settings', () => settings);
 ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.outputDir === 'string') settings.outputDir = s.outputDir;
   if (s && typeof s.autoSave === 'boolean') settings.autoSave = s.autoSave;
+  if (s && typeof s.quality === 'string') settings.quality = s.quality;
+  if (s && typeof s.fps === 'number') settings.fps = s.fps;
+  if (s && typeof s.countdown === 'number') settings.countdown = s.countdown;
+  if (s && (typeof s.audioDeviceId === 'string' || s.audioDeviceId === null)) settings.audioDeviceId = s.audioDeviceId;
+  if (s && typeof s.theme === 'string') settings.theme = s.theme;
+  savePersistedSettings();
   return settings;
 });
 ipcMain.handle('choose-output-dir', async () => {
   const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'], defaultPath: settings.outputDir });
-  if (!r.canceled && r.filePaths[0]) { settings.outputDir = r.filePaths[0]; mainWindow?.webContents.send('settings-updated', settings); return settings.outputDir; }
+  if (!r.canceled && r.filePaths[0]) {
+    settings.outputDir = r.filePaths[0];
+    savePersistedSettings();
+    mainWindow?.webContents.send('settings-updated', settings);
+    return settings.outputDir;
+  }
   return null;
 });
 
@@ -200,13 +241,66 @@ ipcMain.handle('open-file', (_, p) => {
   return shell.openPath(p);
 });
 
+// ─── History ───
+ipcMain.handle('get-history', () => {
+  try { return JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) { return []; }
+});
+
+ipcMain.handle('add-history-entry', (_, entry) => {
+  let history = [];
+  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
+  // Get file size server-side
+  let fileSize = 0;
+  try { fileSize = fs.statSync(entry.filePath).size; } catch (e) {}
+  const full = { ...entry, fileSize, savedAt: entry.savedAt || new Date().toISOString() };
+  history.unshift(full);
+  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+  return history;
+});
+
+ipcMain.handle('delete-history-entry', (_, filePath) => {
+  let history = [];
+  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
+  history = history.filter(e => e.filePath !== filePath);
+  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+  // Attempt to delete file if it's a valid AIXplore recording
+  if (isValidHistoryFilePath(filePath)) {
+    try { fs.unlinkSync(filePath); } catch (e) {}
+  }
+  return history;
+});
+
+ipcMain.handle('open-system-pref', (_, url) => {
+  shell.openExternal(url);
+});
+
+ipcMain.handle('get-file-size', (_, filePath) => {
+  try { return fs.statSync(filePath).size; } catch (e) { return 0; }
+});
+
+// ─── History file access (relaxed path validation: only AIXplore-named files) ───
+ipcMain.handle('history-show-in-finder', (_, p) => {
+  if (!isValidHistoryFilePath(p)) throw new Error('Invalid file path');
+  shell.showItemInFolder(p);
+});
+ipcMain.handle('history-open-file', (_, p) => {
+  if (!isValidHistoryFilePath(p)) throw new Error('Invalid file path');
+  return shell.openPath(p);
+});
+
 function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+R', () => mainWindow?.webContents.send('shortcut-toggle-record'));
   globalShortcut.register('CommandOrControl+Shift+P', () => mainWindow?.webContents.send('shortcut-toggle-pause'));
   globalShortcut.register('Escape', () => mainWindow?.webContents.send('shortcut-stop'));
 }
 
-app.whenReady().then(() => { createWindow(); createTray(); registerShortcuts(); });
+app.whenReady().then(() => {
+  userData = app.getPath('userData');
+  loadPersistedSettings();
+  createWindow();
+  createTray();
+  registerShortcuts();
+});
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

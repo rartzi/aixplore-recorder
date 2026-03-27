@@ -54,7 +54,16 @@ try {
     onConversionStatus: function(cb) { ipcRenderer.on('conversion-status', function(_, s) { cb(s); }); },
     onToggleRecord: function(cb) { ipcRenderer.on('shortcut-toggle-record', function() { cb(); }); },
     onTogglePause: function(cb) { ipcRenderer.on('shortcut-toggle-pause', function() { cb(); }); },
-    onStop: function(cb) { ipcRenderer.on('shortcut-stop', function() { cb(); }); }
+    onStop: function(cb) { ipcRenderer.on('shortcut-stop', function() { cb(); }); },
+
+    // ─── History ───
+    getHistory: function() { return ipcRenderer.invoke('get-history'); },
+    addHistoryEntry: function(entry) { return ipcRenderer.invoke('add-history-entry', entry); },
+    deleteHistoryEntry: function(filePath) { return ipcRenderer.invoke('delete-history-entry', filePath); },
+    historyShowInFinder: function(p) { return ipcRenderer.invoke('history-show-in-finder', p); },
+    historyOpenFile: function(p) { return ipcRenderer.invoke('history-open-file', p); },
+    getFileSize: function(p) { return ipcRenderer.invoke('get-file-size', p); },
+    openSystemPref: function(url) { return ipcRenderer.invoke('open-system-pref', url); }
   });
 
   console.log('[preload] electronAPI exposed OK');
