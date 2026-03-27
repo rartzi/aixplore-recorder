@@ -23,7 +23,7 @@
     "afterSign": "build/notarize.cjs",
     "mac": {
       "category": "public.app-category.productivity",
-      "identity": "Developer ID Application: AMANUEL RONEN ARTZI (Y7HVZ99HD3)",
+      "identity": "AMANUEL RONEN ARTZI (Y7HVZ99HD3)",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "target": [
