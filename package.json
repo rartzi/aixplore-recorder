@@ -4,7 +4,11 @@
   "description": "AIXplore Screen + Camera Recorder",
   "author": "AIXplore Ronen Artzi",
   "main": "src/main.js",
-  "scripts": { "start": "electron .", "build": "electron-builder --mac" },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac",
+    "build:unsigned": "electron-builder --mac --config.mac.identity=null --config.afterSign=''"
+  },
   "devDependencies": { "electron": "^35.0.0", "electron-builder": "^26.0.0" },
   "dependencies": { "@ffmpeg-installer/ffmpeg": "^1.1.0" },
   "overrides": {
@@ -16,9 +20,12 @@
   "build": {
     "appId": "com.aixplore.recorder",
     "productName": "AIXplore Recorder",
+    "afterSign": "build/notarize.cjs",
     "mac": {
       "category": "public.app-category.productivity",
-      "identity": null,
+      "identity": "AMANUEL RONEN ARTZI (Y7HVZ99HD3)",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
       "target": [
         {
           "target": "dmg",

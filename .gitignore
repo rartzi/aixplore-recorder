@@ -4,8 +4,10 @@ package-lock.json
 
 # Build output
 dist/
-build/
 out/
+# build/ contains notarize script — exclude only electron-builder cache
+build/.icon-set/
+build/icon.*
 *.dmg
 *.AppImage
 *.snap

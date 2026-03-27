@@ -1160,10 +1160,24 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     var cw=compositeCanvas.width,ch=compositeCanvas.height;
     compositeCtx.drawImage(hiddenScreenVideo,0,0,cw,ch);
     if(hiddenCamVideo&&hiddenCamVideo.readyState>=2){
+      // Read the PiP's actual DOM position every frame — eliminates all state sync issues
+      var pipEl=$('webcamPip');
+      var areaEl=$('previewArea');
+      var pipRect=pipEl.getBoundingClientRect();
+      var areaRect=areaEl.getBoundingClientRect();
       var vr=getVideoRenderRect();
-      var r=Math.max((pipSize/vr.w)*cw/2,40);
-      var cx=Math.max(r,Math.min(pipPosPercent.x*cw,cw-r));
-      var cy=Math.max(r,Math.min(pipPosPercent.y*ch,ch-r));
+
+      // PiP center relative to previewArea, then normalised to video content (strips letterbox offset)
+      var pipCX=(pipRect.left-areaRect.left)+pipRect.width/2;
+      var pipCY=(pipRect.top-areaRect.top)+pipRect.height/2;
+      var normX=(pipCX-vr.x)/vr.w;
+      var normY=(pipCY-vr.y)/vr.h;
+
+      // Map to canvas — radius scales proportionally so circle size matches what's visible
+      var r=Math.max(pipRect.width/vr.w*cw/2, 20);
+      var cx=Math.max(r,Math.min(normX*cw,cw-r));
+      var cy=Math.max(r,Math.min(normY*ch,ch-r));
+
       compositeCtx.save();compositeCtx.beginPath();compositeCtx.arc(cx,cy,r,0,Math.PI*2);compositeCtx.clip();
       var vw=hiddenCamVideo.videoWidth||320,vh=hiddenCamVideo.videoHeight||320,side=Math.min(vw,vh);
       compositeCtx.translate(cx,cy);compositeCtx.scale(-1,1);
