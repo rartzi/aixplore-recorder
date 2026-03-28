@@ -348,6 +348,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       <div class="setting-group"><label>Mic</label><button id="toggleMic" class="toggle active"></button></div>
       <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle active"></button></div>
       <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
+      <div class="setting-group"><label>Click FX</label><button id="toggleClickFx" class="toggle active"></button></div>
     </div>
     <div class="output-row">
       <label style="font-size:13px;color:var(--dim)">Save to:</label>
@@ -512,6 +513,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
               <option value="3" selected>3 seconds</option>
               <option value="5">5 seconds</option>
             </select>
+          </div>
+          <div class="setting-row">
+            <div><div class="sr-label">Click Highlighting</div><div class="sr-sub">Ripple effect on mouse clicks during recording</div></div>
+            <button id="settingsClickFx" class="toggle active"></button>
           </div>
         </div>
         <div class="settings-section">
@@ -703,6 +708,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   var audioCtx = null, analyser = null, lastSavedPath = '';
   var recordedChunks = [], recordedBlob = null, recordedBlobUrl = null, recordingDuration = 0;
   var hiddenScreenVideo = null, hiddenCamVideo = null;
+  var clickEffects = [];
   var pipPosPercent = { x: 0.85, y: 0.85 }, pipSize = 160;
   var appSettings = {};
 
@@ -723,6 +729,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   function applySettingsToUI(s) {
     appSettings = s;
     if ($('countdownSel') && s.countdown !== undefined) $('countdownSel').value = String(s.countdown);
+    if ($('toggleClickFx')) $('toggleClickFx').classList.toggle('active', s.clickHighlight !== false);
+    if ($('settingsClickFx')) $('settingsClickFx').classList.toggle('active', s.clickHighlight !== false);
   }
 
   // ─── History data cache ───
@@ -861,6 +869,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       if (s.quality) $('settingsQuality').value = s.quality;
       if (s.fps) $('settingsFps').value = String(s.fps);
       if (s.countdown !== undefined) $('settingsCountdown').value = String(s.countdown);
+      if ($('settingsClickFx')) $('settingsClickFx').classList.toggle('active', s.clickHighlight !== false);
       populateAudioDevices(s.audioDeviceId);
     });
   }
@@ -1074,6 +1083,31 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     document.addEventListener('mouseup', function(){dragging=false;});
   })();
 
+  // ─── Click highlight capture ───
+  $('previewArea').addEventListener('mousedown', function(e) {
+    if (!compositeCanvas || appSettings.clickHighlight === false) return;
+    var ar = $('previewArea').getBoundingClientRect();
+    var vr = getVideoRenderRect();
+    var domX = e.clientX - ar.left;
+    var domY = e.clientY - ar.top;
+    var normX = (domX - vr.x) / vr.w;
+    var normY = (domY - vr.y) / vr.h;
+    if (normX < 0 || normX > 1 || normY < 0 || normY > 1) return;
+    clickEffects.push({ x: normX * compositeCanvas.width, y: normY * compositeCanvas.height, t: Date.now() });
+  });
+
+  // Picker click FX toggle — updates appSettings in memory
+  $('toggleClickFx') && $('toggleClickFx').addEventListener('click', function() {
+    appSettings.clickHighlight = $('toggleClickFx').classList.contains('active');
+  });
+
+  // Settings page click FX toggle — persists
+  $('settingsClickFx') && $('settingsClickFx').addEventListener('click', function() {
+    var active = $('settingsClickFx').classList.contains('active');
+    appSettings.clickHighlight = active;
+    window.electronAPI.setSettings({ clickHighlight: active }).then(function(s) { appSettings = s; });
+  });
+
   function getVideoRenderRect() {
     var area=$('previewArea'), ar=area.getBoundingClientRect();
     var video=$('screenPreview'), vw=video.videoWidth||1920, vh=video.videoHeight||1080;
@@ -1184,6 +1218,31 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       var bsf=cw/vr.w;
       compositeCtx.beginPath();compositeCtx.arc(cx,cy,r,0,Math.PI*2);compositeCtx.lineWidth=3*bsf;compositeCtx.strokeStyle='#6c5ce7';compositeCtx.stroke();
     }
+    // ─── Click highlight effects ───
+    if (clickEffects.length > 0 && appSettings.clickHighlight !== false) {
+      var now = Date.now();
+      clickEffects = clickEffects.filter(function(fx) { return now - fx.t < 800; });
+      var scale = cw / 1920;
+      clickEffects.forEach(function(fx) {
+        var prog = (now - fx.t) / 800;
+        var alpha = 1 - prog;
+        var outerR = (20 + prog * 60) * scale;
+        compositeCtx.save();
+        compositeCtx.beginPath();
+        compositeCtx.arc(fx.x, fx.y, outerR, 0, Math.PI * 2);
+        compositeCtx.strokeStyle = 'rgba(255, 80, 80, ' + alpha + ')';
+        compositeCtx.lineWidth = Math.max(2, 3 * scale);
+        compositeCtx.stroke();
+        if (prog < 0.5) {
+          compositeCtx.beginPath();
+          compositeCtx.arc(fx.x, fx.y, outerR * 0.45, 0, Math.PI * 2);
+          compositeCtx.strokeStyle = 'rgba(255, 160, 80, ' + (alpha * 0.75) + ')';
+          compositeCtx.lineWidth = Math.max(1.5, 2 * scale);
+          compositeCtx.stroke();
+        }
+        compositeCtx.restore();
+      });
+    }
   }
 
   function togglePause(){
@@ -1193,6 +1252,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   }
   function stopRecording(){if(!mediaRecorder||mediaRecorder.state==='inactive')return;mediaRecorder.stop();window.electronAPI.setRecordingState(false);}
   function cleanupRecording(){
+    clickEffects = [];
     if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
     if(drawInterval){clearInterval(drawInterval);drawInterval=null;}
     if(hiddenScreenVideo){hiddenScreenVideo.pause();hiddenScreenVideo.srcObject=null;hiddenScreenVideo.remove();hiddenScreenVideo=null;}

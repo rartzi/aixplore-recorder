@@ -16,7 +16,8 @@ let settings = {
   fps: 30,
   countdown: 3,
   audioDeviceId: null,
-  theme: 'system'
+  theme: 'system',
+  clickHighlight: true
 };
 
 // ─── Persistence paths (set in whenReady) ───
@@ -169,6 +170,7 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.countdown === 'number') settings.countdown = s.countdown;
   if (s && (typeof s.audioDeviceId === 'string' || s.audioDeviceId === null)) settings.audioDeviceId = s.audioDeviceId;
   if (s && typeof s.theme === 'string') settings.theme = s.theme;
+  if (s && typeof s.clickHighlight === 'boolean') settings.clickHighlight = s.clickHighlight;
   savePersistedSettings();
   return settings;
 });
