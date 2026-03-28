@@ -21,6 +21,15 @@
     "appId": "com.aixplore.recorder",
     "productName": "AIXplore Recorder",
     "afterSign": "build/notarize.cjs",
+    "electronLanguages": ["en"],
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "!src/click-capture",
+      "!src/*.swift",
+      "!**/*.md",
+      "!**/MEMORY/**"
+    ],
     "extraResources": [
       { "from": "src/click-capture", "to": "click-capture" }
     ],
