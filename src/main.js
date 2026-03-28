@@ -1,14 +1,49 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, dialog,
-        globalShortcut, Tray, Menu, shell, nativeImage, session } = require('electron');
+        globalShortcut, Tray, Menu, shell, nativeImage, session, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
 app.setName('AIXplore Recorder');
 
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
+let clickCaptureProc = null;
+
+function startClickCapture() {
+  if (clickCaptureProc) return;
+  const binPath = path.join(__dirname, 'click-capture');
+  if (!fs.existsSync(binPath)) { console.log('[click-capture] binary missing'); return; }
+  try {
+    clickCaptureProc = spawn(binPath, [], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let buf = '';
+    clickCaptureProc.stdout.on('data', (data) => {
+      buf += data.toString();
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const click = JSON.parse(line);
+          const displays = screen.getAllDisplays();
+          const d = displays.find(d =>
+            click.x >= d.bounds.x && click.x < d.bounds.x + d.bounds.width &&
+            click.y >= d.bounds.y && click.y < d.bounds.y + d.bounds.height
+          ) || screen.getPrimaryDisplay();
+          const normX = (click.x - d.bounds.x) / d.bounds.width;
+          const normY = (click.y - d.bounds.y) / d.bounds.height;
+          mainWindow?.webContents.send('global-click', { normX, normY });
+        } catch (e) {}
+      }
+    });
+    clickCaptureProc.on('exit', () => { clickCaptureProc = null; });
+    console.log('[click-capture] started pid:', clickCaptureProc.pid);
+  } catch (e) { console.log('[click-capture] error:', e.message); clickCaptureProc = null; }
+}
+
+function stopClickCapture() {
+  if (clickCaptureProc) { clickCaptureProc.kill(); clickCaptureProc = null; }
+}
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
   autoSave: false,
@@ -157,7 +192,7 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => setTrayRec(on));
+ipcMain.on('set-recording-state', (_, on) => { setTrayRec(on); if (on) startClickCapture(); else stopClickCapture(); });
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───
@@ -312,6 +347,6 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
 });
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopClickCapture(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

@@ -1084,14 +1084,22 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   })();
 
   // ─── Click highlight capture ───
+  // Global clicks (terminal or any external window) — Swift subprocess → IPC
+  window.electronAPI.onGlobalClick(function(coords) {
+    if (!compositeCanvas || appSettings.clickHighlight === false) return;
+    clickEffects.push({
+      x: coords.normX * compositeCanvas.width,
+      y: coords.normY * compositeCanvas.height,
+      t: Date.now()
+    });
+  });
+  // Clicks within the app's own preview area (NSEvent global monitor excludes same-app events)
   $('previewArea').addEventListener('mousedown', function(e) {
     if (!compositeCanvas || appSettings.clickHighlight === false) return;
     var ar = $('previewArea').getBoundingClientRect();
     var vr = getVideoRenderRect();
-    var domX = e.clientX - ar.left;
-    var domY = e.clientY - ar.top;
-    var normX = (domX - vr.x) / vr.w;
-    var normY = (domY - vr.y) / vr.h;
+    var normX = (e.clientX - ar.left - vr.x) / vr.w;
+    var normY = (e.clientY - ar.top  - vr.y) / vr.h;
     if (normX < 0 || normX > 1 || normY < 0 || normY > 1) return;
     clickEffects.push({ x: normX * compositeCanvas.width, y: normY * compositeCanvas.height, t: Date.now() });
   });
