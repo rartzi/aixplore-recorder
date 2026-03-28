@@ -11,24 +11,59 @@ app.setName('AIXplore Recorder');
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
 let clickCaptureProc = null;
 let cursorPollInterval = null;
+let recordingSourceBounds = null; // {x,y,w,h} in logical coords — set when recording starts
+
+// Query CGWindowListCopyWindowInfo for a window source's logical bounds.
+// Returns a Promise that resolves to {x,y,w,h} or null if unavailable.
+function queryWindowBounds(windowId) {
+  return new Promise((resolve) => {
+    const binPath = path.join(__dirname, 'click-capture');
+    if (!fs.existsSync(binPath)) return resolve(null);
+    execFile(binPath, ['--window-id', String(windowId)], { timeout: 3000 }, (err, stdout) => {
+      if (err || !stdout.trim()) return resolve(null);
+      try {
+        const info = JSON.parse(stdout.trim());
+        if (info.type === 'window_bounds' && info.w > 0)
+          resolve({ x: info.x, y: info.y, w: info.w, h: info.h });
+        else resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  });
+}
+
+function normalizeCursorPos(pos) {
+  if (recordingSourceBounds) {
+    // Window source: normalize relative to the captured window's bounds
+    const b = recordingSourceBounds;
+    return {
+      normX: Math.max(0, Math.min(1, (pos.x - b.x) / b.w)),
+      normY: Math.max(0, Math.min(1, (pos.y - b.y) / b.h))
+    };
+  }
+  // Screen source: normalize relative to the display the cursor is on
+  const displays = screen.getAllDisplays();
+  const d = displays.find(d =>
+    pos.x >= d.bounds.x && pos.x < d.bounds.x + d.bounds.width &&
+    pos.y >= d.bounds.y && pos.y < d.bounds.y + d.bounds.height
+  ) || screen.getPrimaryDisplay();
+  return {
+    normX: (pos.x - d.bounds.x) / d.bounds.width,
+    normY: (pos.y - d.bounds.y) / d.bounds.height
+  };
+}
 
 function startCursorPoll() {
   if (cursorPollInterval) return;
   cursorPollInterval = setInterval(() => {
     const pos = screen.getCursorScreenPoint();
-    const displays = screen.getAllDisplays();
-    const d = displays.find(d =>
-      pos.x >= d.bounds.x && pos.x < d.bounds.x + d.bounds.width &&
-      pos.y >= d.bounds.y && pos.y < d.bounds.y + d.bounds.height
-    ) || screen.getPrimaryDisplay();
-    const normX = (pos.x - d.bounds.x) / d.bounds.width;
-    const normY = (pos.y - d.bounds.y) / d.bounds.height;
+    const { normX, normY } = normalizeCursorPos(pos);
     mainWindow?.webContents.send('cursor-pos', { normX, normY });
   }, 33); // ~30fps
 }
 
 function stopCursorPoll() {
   if (cursorPollInterval) { clearInterval(cursorPollInterval); cursorPollInterval = null; }
+  recordingSourceBounds = null;
 }
 
 function startClickCapture() {
@@ -72,7 +107,9 @@ let settings = {
   countdown: 3,
   audioDeviceId: null,
   theme: 'system',
-  clickHighlight: true
+  clickHighlight: true,
+  cursorFxSize: 'medium',  // small | medium | large
+  cursorFxColor: 'yellow'  // yellow | white | cyan | red
 };
 
 // ─── Persistence paths (set in whenReady) ───
@@ -214,8 +251,22 @@ ipcMain.handle('get-sources', async () => {
 
 ipcMain.on('set-recording-state', (_, on) => {
   setTrayRec(on);
-  if (on) { startClickCapture(); startCursorPoll(); }
-  else    { stopClickCapture();  stopCursorPoll(); }
+  if (on) {
+    // For window sources (id = "window:12345:0"), resolve bounds before polling
+    const windowMatch = selectedSourceId && selectedSourceId.match(/^window:(\d+)/);
+    if (windowMatch) {
+      queryWindowBounds(parseInt(windowMatch[1])).then(bounds => {
+        recordingSourceBounds = bounds;
+        console.log('[cursor] source bounds:', bounds);
+        startClickCapture(); startCursorPoll();
+      });
+    } else {
+      recordingSourceBounds = null;
+      startClickCapture(); startCursorPoll();
+    }
+  } else {
+    stopClickCapture(); stopCursorPoll();
+  }
 });
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
@@ -230,6 +281,8 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && (typeof s.audioDeviceId === 'string' || s.audioDeviceId === null)) settings.audioDeviceId = s.audioDeviceId;
   if (s && typeof s.theme === 'string') settings.theme = s.theme;
   if (s && typeof s.clickHighlight === 'boolean') settings.clickHighlight = s.clickHighlight;
+  if (s && typeof s.cursorFxSize === 'string') settings.cursorFxSize = s.cursorFxSize;
+  if (s && typeof s.cursorFxColor === 'string') settings.cursorFxColor = s.cursorFxColor;
   savePersistedSettings();
   return settings;
 });
