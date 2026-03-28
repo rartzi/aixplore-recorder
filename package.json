@@ -22,6 +22,7 @@
     "productName": "AIXplore Recorder",
     "afterSign": "build/notarize.cjs",
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
       "identity": "AMANUEL RONEN ARTZI (Y7HVZ99HD3)",
       "hardenedRuntime": true,

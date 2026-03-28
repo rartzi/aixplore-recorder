@@ -127,7 +127,9 @@ async function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAADklEQVR42mP8/5+hHgAHggJ/TDnlFQAAAABJRU5ErkJggg==');
+  // 22x22 template PNG: inner filled circle + outer ring (record-button style)
+  const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAVElEQVR4nGNgGI7gDg5MdQMpsoBYTSQZTqpLiFKPTdF/HJgkw4k1FJfhRLmWkKHohuN09ajBQ9hgBlolN1y2UiWDEK2IXPU0KYTQNVG12CTGgmEGAIKon9lj9gZlAAAAAElFTkSuQmCC');
+  icon.setTemplateImage(true); // adapts to light/dark menu bar automatically
   tray = new Tray(icon);
   tray.setToolTip('AIXplore Recorder');
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -297,6 +299,11 @@ function registerShortcuts() {
 app.whenReady().then(() => {
   userData = app.getPath('userData');
   loadPersistedSettings();
+  // Set dock icon (applies in dev mode; packaged builds use the .icns automatically)
+  if (process.platform === 'darwin' && app.dock) {
+    const iconPath = path.join(__dirname, '..', 'assets', 'icon-1024.png');
+    if (fs.existsSync(iconPath)) app.dock.setIcon(nativeImage.createFromPath(iconPath));
+  }
   createWindow();
   createTray();
   registerShortcuts();
