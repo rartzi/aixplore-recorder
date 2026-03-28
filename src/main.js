@@ -10,6 +10,26 @@ app.setName('AIXplore Recorder');
 
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
 let clickCaptureProc = null;
+let cursorPollInterval = null;
+
+function startCursorPoll() {
+  if (cursorPollInterval) return;
+  cursorPollInterval = setInterval(() => {
+    const pos = screen.getCursorScreenPoint();
+    const displays = screen.getAllDisplays();
+    const d = displays.find(d =>
+      pos.x >= d.bounds.x && pos.x < d.bounds.x + d.bounds.width &&
+      pos.y >= d.bounds.y && pos.y < d.bounds.y + d.bounds.height
+    ) || screen.getPrimaryDisplay();
+    const normX = (pos.x - d.bounds.x) / d.bounds.width;
+    const normY = (pos.y - d.bounds.y) / d.bounds.height;
+    mainWindow?.webContents.send('cursor-pos', { normX, normY });
+  }, 33); // ~30fps
+}
+
+function stopCursorPoll() {
+  if (cursorPollInterval) { clearInterval(cursorPollInterval); cursorPollInterval = null; }
+}
 
 function startClickCapture() {
   if (clickCaptureProc) return;
@@ -192,7 +212,11 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => { setTrayRec(on); if (on) startClickCapture(); else stopClickCapture(); });
+ipcMain.on('set-recording-state', (_, on) => {
+  setTrayRec(on);
+  if (on) { startClickCapture(); startCursorPoll(); }
+  else    { stopClickCapture();  stopCursorPoll(); }
+});
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───
@@ -347,6 +371,6 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
 });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); stopClickCapture(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopClickCapture(); stopCursorPoll(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

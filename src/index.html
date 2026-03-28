@@ -348,7 +348,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       <div class="setting-group"><label>Mic</label><button id="toggleMic" class="toggle active"></button></div>
       <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle active"></button></div>
       <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
-      <div class="setting-group"><label>Click FX</label><button id="toggleClickFx" class="toggle active"></button></div>
+      <div class="setting-group"><label>Cursor FX</label><button id="toggleClickFx" class="toggle active"></button></div>
     </div>
     <div class="output-row">
       <label style="font-size:13px;color:var(--dim)">Save to:</label>
@@ -515,7 +515,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
             </select>
           </div>
           <div class="setting-row">
-            <div><div class="sr-label">Click Highlighting</div><div class="sr-sub">Ripple effect on mouse clicks during recording</div></div>
+            <div><div class="sr-label">Cursor Spotlight</div><div class="sr-sub">Soft glow follows cursor; pulses on click</div></div>
             <button id="settingsClickFx" class="toggle active"></button>
           </div>
         </div>
@@ -709,6 +709,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   var recordedChunks = [], recordedBlob = null, recordedBlobUrl = null, recordingDuration = 0;
   var hiddenScreenVideo = null, hiddenCamVideo = null;
   var clickEffects = [];
+  var cursorPos = null;      // {normX, normY} — updated at 30fps from main process
+  var lastClickTime = 0;     // timestamp of last click for pulse effect
   var pipPosPercent = { x: 0.85, y: 0.85 }, pipSize = 160;
   var appSettings = {};
 
@@ -1083,25 +1085,18 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     document.addEventListener('mouseup', function(){dragging=false;});
   })();
 
-  // ─── Click highlight capture ───
-  // Global clicks (terminal or any external window) — Swift subprocess → IPC
-  window.electronAPI.onGlobalClick(function(coords) {
-    if (!compositeCanvas || appSettings.clickHighlight === false) return;
-    clickEffects.push({
-      x: coords.normX * compositeCanvas.width,
-      y: coords.normY * compositeCanvas.height,
-      t: Date.now()
-    });
+  // ─── Cursor spotlight capture ───
+  // Cursor position from main-process poll (30fps) — drives the spotlight glow
+  window.electronAPI.onCursorPos(function(pos) {
+    cursorPos = pos;
   });
-  // Clicks within the app's own preview area (NSEvent global monitor excludes same-app events)
-  $('previewArea').addEventListener('mousedown', function(e) {
-    if (!compositeCanvas || appSettings.clickHighlight === false) return;
-    var ar = $('previewArea').getBoundingClientRect();
-    var vr = getVideoRenderRect();
-    var normX = (e.clientX - ar.left - vr.x) / vr.w;
-    var normY = (e.clientY - ar.top  - vr.y) / vr.h;
-    if (normX < 0 || normX > 1 || normY < 0 || normY > 1) return;
-    clickEffects.push({ x: normX * compositeCanvas.width, y: normY * compositeCanvas.height, t: Date.now() });
+  // Clicks (Swift global monitor) — trigger pulse on the existing spotlight
+  window.electronAPI.onGlobalClick(function() {
+    lastClickTime = Date.now();
+  });
+  // Clicks within the app's own preview area
+  $('previewArea').addEventListener('mousedown', function() {
+    lastClickTime = Date.now();
   });
 
   // Picker click FX toggle — updates appSettings in memory
@@ -1227,29 +1222,34 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       compositeCtx.beginPath();compositeCtx.arc(cx,cy,r,0,Math.PI*2);compositeCtx.lineWidth=3*bsf;compositeCtx.strokeStyle='#6c5ce7';compositeCtx.stroke();
     }
     // ─── Click highlight effects ───
-    if (clickEffects.length > 0 && appSettings.clickHighlight !== false) {
+    // ─── Cursor spotlight ───
+    if (cursorPos && appSettings.clickHighlight !== false) {
       var now = Date.now();
-      clickEffects = clickEffects.filter(function(fx) { return now - fx.t < 800; });
       var scale = cw / 1920;
-      clickEffects.forEach(function(fx) {
-        var prog = (now - fx.t) / 800;
-        var alpha = 1 - prog;
-        var outerR = (20 + prog * 60) * scale;
-        compositeCtx.save();
-        compositeCtx.beginPath();
-        compositeCtx.arc(fx.x, fx.y, outerR, 0, Math.PI * 2);
-        compositeCtx.strokeStyle = 'rgba(255, 80, 80, ' + alpha + ')';
-        compositeCtx.lineWidth = Math.max(2, 3 * scale);
-        compositeCtx.stroke();
-        if (prog < 0.5) {
-          compositeCtx.beginPath();
-          compositeCtx.arc(fx.x, fx.y, outerR * 0.45, 0, Math.PI * 2);
-          compositeCtx.strokeStyle = 'rgba(255, 160, 80, ' + (alpha * 0.75) + ')';
-          compositeCtx.lineWidth = Math.max(1.5, 2 * scale);
-          compositeCtx.stroke();
-        }
-        compositeCtx.restore();
-      });
+      var cx2 = cursorPos.normX * cw;
+      var cy2 = cursorPos.normY * ch;
+      // Base spotlight radius; expand briefly on click (pulse)
+      var pulseProg = Math.max(0, 1 - (now - lastClickTime) / 400);
+      var baseR  = 55 * scale;
+      var spotR  = baseR + pulseProg * 30 * scale;
+      var grad = compositeCtx.createRadialGradient(cx2, cy2, 0, cx2, cy2, spotR);
+      var coreAlpha   = 0.28 + pulseProg * 0.22;
+      var midAlpha    = 0.12 + pulseProg * 0.10;
+      grad.addColorStop(0,   'rgba(255, 248, 180, ' + coreAlpha + ')');
+      grad.addColorStop(0.4, 'rgba(255, 240, 120, ' + midAlpha  + ')');
+      grad.addColorStop(1,   'rgba(255, 220,  80, 0)');
+      compositeCtx.save();
+      compositeCtx.beginPath();
+      compositeCtx.arc(cx2, cy2, spotR, 0, Math.PI * 2);
+      compositeCtx.fillStyle = grad;
+      compositeCtx.fill();
+      // Subtle cursor ring
+      compositeCtx.beginPath();
+      compositeCtx.arc(cx2, cy2, 10 * scale, 0, Math.PI * 2);
+      compositeCtx.strokeStyle = 'rgba(255, 220, 60, ' + (0.5 + pulseProg * 0.4) + ')';
+      compositeCtx.lineWidth = Math.max(1.5, 2 * scale);
+      compositeCtx.stroke();
+      compositeCtx.restore();
     }
   }
 
@@ -1260,7 +1260,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   }
   function stopRecording(){if(!mediaRecorder||mediaRecorder.state==='inactive')return;mediaRecorder.stop();window.electronAPI.setRecordingState(false);}
   function cleanupRecording(){
-    clickEffects = [];
+    clickEffects = []; cursorPos = null; lastClickTime = 0;
     if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
     if(drawInterval){clearInterval(drawInterval);drawInterval=null;}
     if(hiddenScreenVideo){hiddenScreenVideo.pause();hiddenScreenVideo.srcObject=null;hiddenScreenVideo.remove();hiddenScreenVideo=null;}
