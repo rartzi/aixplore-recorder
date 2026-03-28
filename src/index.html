@@ -108,7 +108,7 @@ body::before { content: ''; position: fixed; inset: 0; background: var(--bloom);
 .source-card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); padding: 10px; cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow); }
 .source-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--glow); }
 .source-card.selected { border-color: var(--accent); background: var(--surface2); box-shadow: var(--glow); }
-.source-card img { width: 100%; border-radius: var(--radius-sm); aspect-ratio: 16/9; object-fit: cover; background: #000; }
+.source-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .source-card span { display: block; margin-top: 8px; font-size: 13px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 0; }
 .setting-group { display: flex; align-items: center; gap: 8px; }
@@ -558,7 +558,13 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         </div>
         <div class="settings-section">
           <h3>Recording Presets</h3>
-          <div id="presetsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div class="setting-row" style="padding-bottom:4px;">
+            <div><div class="sr-label">Default Preset</div><div class="sr-sub">Auto-applied when opening the source picker</div></div>
+            <select id="settingsDefaultPreset" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;min-width:160px;">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div id="presetsList" style="display:flex;flex-direction:column;gap:8px;margin-top:4px;"></div>
           <div style="display:flex;justify-content:flex-end;margin-top:8px;">
             <button class="btn-tiny" id="btnSavePresetSettings">Save Current as Preset</button>
           </div>
@@ -728,7 +734,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     if (viewId === 'viewHistory') loadHistory();
     if (viewId === 'viewPermissions') checkPermissions();
     if (viewId === 'viewSettings') { loadSettingsView(); loadPresets(); }
-    if (viewId === 'viewPicker') { sourceRetryCount = 0; loadSources(); loadPresets(); }
+    if (viewId === 'viewPicker') { sourceRetryCount = 0; loadSources(); loadPresets(applyDefaultPreset); }
   }
 
   function showError(msg) { $('errorBox').textContent = msg; $('errorBox').classList.remove('hidden'); }
@@ -1052,12 +1058,20 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   // ─── Presets ───
   var presetsCache = [];
 
-  function loadPresets() {
+  function loadPresets(cb) {
     window.electronAPI.getPresets().then(function(presets) {
       presetsCache = presets || [];
       renderPresetSelector();
       renderPresetsSettings();
+      if (cb) cb();
     }).catch(function() {});
+  }
+
+  function applyDefaultPreset() {
+    var defaultId = appSettings && appSettings.defaultPresetId;
+    if (!defaultId) return;
+    var p = presetsCache.find(function(x) { return x.id === defaultId; });
+    if (p) applyPreset(p);
   }
 
   function renderPresetSelector() {
@@ -1069,28 +1083,112 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     });
   }
 
+  function renderDefaultPresetSelector() {
+    var sel = $('settingsDefaultPreset'); if (!sel) return;
+    var cur = (appSettings && appSettings.defaultPresetId) || '';
+    sel.innerHTML = '<option value="">None</option>';
+    presetsCache.forEach(function(p) {
+      var opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = p.name;
+      if (p.id === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   function renderPresetsSettings() {
     var list = $('presetsList'); if (!list) return;
+    renderDefaultPresetSelector();
     if (presetsCache.length === 0) {
       list.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:4px 0;">No presets yet. Save your current settings as a preset below.</div>';
       return;
     }
     list.innerHTML = '';
+    var defaultId = (appSettings && appSettings.defaultPresetId) || '';
     presetsCache.forEach(function(p) {
-      var row = document.createElement('div');
-      row.className = 'setting-row';
-      var desc = [p.quality + ' quality', p.fps + 'fps',
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:var(--surface);';
+
+      // ── Summary row ──
+      var summaryRow = document.createElement('div');
+      summaryRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      var isDefault = p.id === defaultId;
+      var desc = [p.quality + ' · ' + p.fps + 'fps',
         p.countdown ? p.countdown + 's countdown' : 'no countdown',
         p.cam ? 'cam' : 'no cam', p.mic ? 'mic' : 'no mic',
-        p.sysAudio ? 'system audio' : ''].filter(Boolean).join(' · ');
-      row.innerHTML = '<div><div class="sr-label">' + esc(p.name) + '</div><div class="sr-sub">' + esc(desc) + '</div></div>' +
+        p.sysAudio ? 'sys audio' : ''].filter(Boolean).join(' · ');
+      summaryRow.innerHTML =
+        '<div style="flex:1;min-width:0;">' +
+          '<span style="font-size:13px;font-weight:600;">' + esc(p.name) + '</span>' +
+          (isDefault ? ' <span style="font-size:10px;background:rgba(123,111,240,0.18);color:var(--accent);border-radius:4px;padding:1px 6px;margin-left:4px;">Default</span>' : '') +
+          '<div style="font-size:11px;color:var(--dim);margin-top:2px;">' + esc(desc) + '</div>' +
+        '</div>' +
+        '<button class="btn-tiny" data-edit="' + esc(p.id) + '">Edit</button>' +
         '<button class="btn-tiny" data-del="' + esc(p.id) + '" style="color:var(--red);">Delete</button>';
-      row.querySelector('[data-del]').addEventListener('click', function() {
-        window.electronAPI.deletePreset(this.dataset.del).then(function(updated) {
+      wrap.appendChild(summaryRow);
+
+      // ── Inline edit form (hidden by default) ──
+      var editForm = document.createElement('div');
+      editForm.style.cssText = 'display:none;flex-direction:column;gap:8px;padding-top:4px;border-top:1px solid var(--border);';
+      editForm.innerHTML =
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+          '<input type="text" class="preset-name-input" value="' + esc(p.name) + '" placeholder="Preset name" style="flex:1;min-width:120px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px;">' +
+          '<select class="preset-quality" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;">' +
+            '<option value="high"' + (p.quality==='high'?' selected':'') + '>High (6Mbps)</option>' +
+            '<option value="medium"' + (p.quality==='medium'?' selected':'') + '>Medium (3Mbps)</option>' +
+            '<option value="low"' + (p.quality==='low'?' selected':'') + '>Low (1.5Mbps)</option>' +
+          '</select>' +
+          '<select class="preset-fps" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;">' +
+            '<option value="60"' + (p.fps===60?' selected':'') + '>60 fps</option>' +
+            '<option value="30"' + (p.fps===30?' selected':'') + '>30 fps</option>' +
+            '<option value="24"' + (p.fps===24?' selected':'') + '>24 fps</option>' +
+          '</select>' +
+          '<select class="preset-countdown" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;">' +
+            '<option value="0"' + (p.countdown===0?' selected':'') + '>No countdown</option>' +
+            '<option value="3"' + (p.countdown===3?' selected':'') + '>3s countdown</option>' +
+            '<option value="5"' + (p.countdown===5?' selected':'') + '>5s countdown</option>' +
+          '</select>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;align-items:center;">' +
+          '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-cam"' + (p.cam?' checked':'') + '> Webcam</label>' +
+          '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-mic"' + (p.mic?' checked':'') + '> Microphone</label>' +
+          '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-sys"' + (p.sysAudio?' checked':'') + '> System Audio</label>' +
+          '<div style="margin-left:auto;display:flex;gap:6px;">' +
+            '<button class="btn-tiny preset-save-btn">Save</button>' +
+            '<button class="btn-tiny preset-cancel-btn">Cancel</button>' +
+          '</div>' +
+        '</div>';
+      wrap.appendChild(editForm);
+
+      // ── Wire buttons ──
+      summaryRow.querySelector('[data-edit]').addEventListener('click', function() {
+        editForm.style.display = editForm.style.display === 'flex' ? 'none' : 'flex';
+      });
+      summaryRow.querySelector('[data-del]').addEventListener('click', function() {
+        window.electronAPI.deletePreset(p.id).then(function(updated) {
           presetsCache = updated; renderPresetSelector(); renderPresetsSettings();
         }).catch(function() {});
       });
-      list.appendChild(row);
+      editForm.querySelector('.preset-save-btn').addEventListener('click', function() {
+        var updated = {
+          id: p.id,
+          name: (editForm.querySelector('.preset-name-input').value || p.name).trim(),
+          quality:   editForm.querySelector('.preset-quality').value,
+          fps:       parseInt(editForm.querySelector('.preset-fps').value),
+          countdown: parseInt(editForm.querySelector('.preset-countdown').value),
+          cam:       editForm.querySelector('.preset-cam').checked,
+          mic:       editForm.querySelector('.preset-mic').checked,
+          sysAudio:  editForm.querySelector('.preset-sys').checked
+        };
+        if (!updated.name) return;
+        window.electronAPI.updatePreset(updated).then(function(all) {
+          presetsCache = all; renderPresetSelector(); renderPresetsSettings();
+        }).catch(function() {});
+      });
+      editForm.querySelector('.preset-cancel-btn').addEventListener('click', function() {
+        editForm.style.display = 'none';
+      });
+
+      list.appendChild(wrap);
     });
   }
 
@@ -1131,6 +1229,12 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   $('btnSavePreset') && $('btnSavePreset').addEventListener('click', saveCurrentAsPreset);
   $('btnSavePresetSettings') && $('btnSavePresetSettings').addEventListener('click', saveCurrentAsPreset);
 
+  // Default preset selector
+  $('settingsDefaultPreset') && $('settingsDefaultPreset').addEventListener('change', function() {
+    appSettings.defaultPresetId = this.value;
+    window.electronAPI.setSettings({ defaultPresetId: this.value }).then(function(s) { appSettings = s; });
+  });
+
   // ─── XSS helper ───
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -1155,7 +1259,34 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       sourceRetryCount = 0; grid.innerHTML = '';
       sources.forEach(function(s) {
         var card = document.createElement('div'); card.className = 'source-card';
-        var img = document.createElement('img'); img.src = s.thumbnail; card.appendChild(img);
+        // Thumbnail area — detect blank (black) thumbnails and show placeholder
+        var thumbWrap = document.createElement('div');
+        thumbWrap.style.cssText = 'position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--radius-sm);overflow:hidden;background:#111;';
+        var img = document.createElement('img');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        img.src = s.thumbnail;
+        // Async blank-thumbnail detection via OffscreenCanvas
+        img.onload = function() {
+          try {
+            var oc = new OffscreenCanvas(16, 9);
+            var ctx = oc.getContext('2d');
+            ctx.drawImage(img, 0, 0, 16, 9);
+            var d = ctx.getImageData(0, 0, 16, 9).data;
+            var sum = 0;
+            for (var i = 0; i < d.length; i += 4) sum += d[i] + d[i+1] + d[i+2];
+            if (sum / (d.length / 4 * 3) < 12) {
+              // Blank — show placeholder overlay
+              img.style.opacity = '0';
+              var ph = document.createElement('div');
+              ph.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--dim);';
+              ph.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' +
+                '<span style="font-size:11px;">No preview</span>';
+              thumbWrap.appendChild(ph);
+            }
+          } catch(e) {}
+        };
+        thumbWrap.appendChild(img);
+        card.appendChild(thumbWrap);
         var lbl = document.createElement('span'); lbl.textContent = s.name; card.appendChild(lbl);
         card.addEventListener('click', function() {
           document.querySelectorAll('.source-card').forEach(function(c){c.classList.remove('selected');});

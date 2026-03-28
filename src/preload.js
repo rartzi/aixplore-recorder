@@ -74,7 +74,8 @@ try {
     // ─── Presets ───
     getPresets: function() { return ipcRenderer.invoke('get-presets'); },
     savePreset: function(p) { return ipcRenderer.invoke('save-preset', p); },
-    deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); }
+    deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); },
+    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); }
   });
 
   console.log('[preload] electronAPI exposed OK');
