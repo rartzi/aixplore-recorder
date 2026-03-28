@@ -74,6 +74,7 @@ function startClickCapture() {
   if (!fs.existsSync(binPath)) { console.log('[click-capture] binary missing'); return; }
   try {
     clickCaptureProc = spawn(binPath, [], { stdio: ['ignore', 'pipe', 'ignore'] });
+    clickCaptureProc.unref(); // don't block Electron exit waiting for this subprocess
     let buf = '';
     clickCaptureProc.stdout.on('data', (data) => {
       buf += data.toString();
@@ -99,7 +100,7 @@ function startClickCapture() {
 }
 
 function stopClickCapture() {
-  if (clickCaptureProc) { clickCaptureProc.kill(); clickCaptureProc = null; }
+  if (clickCaptureProc) { clickCaptureProc.kill('SIGKILL'); clickCaptureProc = null; }
 }
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
@@ -293,7 +294,9 @@ function updateTrayMenu() {
   template.push({ type: 'separator' });
   template.push({ label: 'Show AIXplore Recorder', click: () => showMainWindow() });
   template.push({ type: 'separator' });
-  template.push({ label: 'Quit', click: () => app.quit() });
+  template.push({ label: 'Quit', click: () => {
+    stopClickCapture(); stopCursorPoll(); app.quit();
+  } });
 
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
@@ -530,6 +533,10 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
 });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); stopClickCapture(); stopCursorPoll(); });
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  stopClickCapture();
+  stopCursorPoll();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
