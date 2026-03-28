@@ -350,6 +350,15 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
       <div class="setting-group"><label>Cursor FX</label><button id="toggleClickFx" class="toggle active"></button></div>
     </div>
+    <div class="settings-row" style="padding:4px 0;">
+      <div class="setting-group" style="flex:1;">
+        <label>Preset</label>
+        <select id="presetSel" class="styled" style="flex:1;max-width:220px;">
+          <option value="">— apply a preset —</option>
+        </select>
+      </div>
+      <button id="btnSavePreset" class="btn-tiny">Save Current as Preset</button>
+    </div>
     <div class="output-row">
       <label style="font-size:13px;color:var(--dim)">Save to:</label>
       <span id="outputPath" class="path-display">Loading...</span>
@@ -547,6 +556,13 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
             </select>
           </div>
         </div>
+        <div class="settings-section">
+          <h3>Recording Presets</h3>
+          <div id="presetsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button class="btn-tiny" id="btnSavePresetSettings">Save Current as Preset</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -711,8 +727,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     if (viewId === 'viewDashboard') loadDashboard();
     if (viewId === 'viewHistory') loadHistory();
     if (viewId === 'viewPermissions') checkPermissions();
-    if (viewId === 'viewSettings') loadSettingsView();
-    if (viewId === 'viewPicker') { sourceRetryCount = 0; loadSources(); }
+    if (viewId === 'viewSettings') { loadSettingsView(); loadPresets(); }
+    if (viewId === 'viewPicker') { sourceRetryCount = 0; loadSources(); loadPresets(); }
   }
 
   function showError(msg) { $('errorBox').textContent = msg; $('errorBox').classList.remove('hidden'); }
@@ -744,6 +760,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     appSettings = s;
     $('outputPath').textContent = s.outputDir;
     applySettingsToUI(s);
+    loadPresets();
     navTo('viewDashboard');
   }).catch(function(err) { console.error('init error:', err); showView('viewDashboard'); loadDashboard(); });
 
@@ -1031,6 +1048,88 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       chart.appendChild(wrap);
     });
   }
+
+  // ─── Presets ───
+  var presetsCache = [];
+
+  function loadPresets() {
+    window.electronAPI.getPresets().then(function(presets) {
+      presetsCache = presets || [];
+      renderPresetSelector();
+      renderPresetsSettings();
+    }).catch(function() {});
+  }
+
+  function renderPresetSelector() {
+    var sel = $('presetSel'); if (!sel) return;
+    sel.innerHTML = '<option value="">— apply a preset —</option>';
+    presetsCache.forEach(function(p) {
+      var opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt);
+    });
+  }
+
+  function renderPresetsSettings() {
+    var list = $('presetsList'); if (!list) return;
+    if (presetsCache.length === 0) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--dim);padding:4px 0;">No presets yet. Save your current settings as a preset below.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    presetsCache.forEach(function(p) {
+      var row = document.createElement('div');
+      row.className = 'setting-row';
+      var desc = [p.quality + ' quality', p.fps + 'fps',
+        p.countdown ? p.countdown + 's countdown' : 'no countdown',
+        p.cam ? 'cam' : 'no cam', p.mic ? 'mic' : 'no mic',
+        p.sysAudio ? 'system audio' : ''].filter(Boolean).join(' · ');
+      row.innerHTML = '<div><div class="sr-label">' + esc(p.name) + '</div><div class="sr-sub">' + esc(desc) + '</div></div>' +
+        '<button class="btn-tiny" data-del="' + esc(p.id) + '" style="color:var(--red);">Delete</button>';
+      row.querySelector('[data-del]').addEventListener('click', function() {
+        window.electronAPI.deletePreset(this.dataset.del).then(function(updated) {
+          presetsCache = updated; renderPresetSelector(); renderPresetsSettings();
+        }).catch(function() {});
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function applyPreset(p) {
+    if (!p) return;
+    if ($('toggleCam'))  $('toggleCam').classList.toggle('active', p.cam !== false);
+    if ($('toggleMic'))  $('toggleMic').classList.toggle('active', p.mic !== false);
+    if ($('toggleSys'))  $('toggleSys').classList.toggle('active', p.sysAudio === true);
+    if ($('countdownSel')) $('countdownSel').value = String(p.countdown || 0);
+    window.electronAPI.setSettings({ quality: p.quality, fps: p.fps, countdown: p.countdown || 0 })
+      .then(function(s) { appSettings = s; }).catch(function() {});
+  }
+
+  function saveCurrentAsPreset() {
+    var name = prompt('Name this preset:');
+    if (!name || !name.trim()) return;
+    var preset = {
+      name: name.trim(),
+      quality: appSettings.quality || 'medium',
+      fps: appSettings.fps || 30,
+      countdown: parseInt(($('countdownSel') || {}).value || '0') || 0,
+      cam:      $('toggleCam')  ? $('toggleCam').classList.contains('active')  : true,
+      mic:      $('toggleMic')  ? $('toggleMic').classList.contains('active')  : true,
+      sysAudio: $('toggleSys')  ? $('toggleSys').classList.contains('active')  : false
+    };
+    window.electronAPI.savePreset(preset).then(function(updated) {
+      presetsCache = updated; renderPresetSelector(); renderPresetsSettings();
+    }).catch(function() {});
+  }
+
+  $('presetSel') && $('presetSel').addEventListener('change', function() {
+    var id = this.value; if (!id) return;
+    var p = presetsCache.find(function(x) { return x.id === id; });
+    applyPreset(p);
+    this.value = '';  // reset selector after applying
+  });
+
+  $('btnSavePreset') && $('btnSavePreset').addEventListener('click', saveCurrentAsPreset);
+  $('btnSavePresetSettings') && $('btnSavePresetSettings').addEventListener('click', saveCurrentAsPreset);
 
   // ─── XSS helper ───
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

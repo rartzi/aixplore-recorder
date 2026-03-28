@@ -111,7 +111,12 @@ let settings = {
   theme: 'system',
   clickHighlight: true,
   cursorFxSize: 'medium',  // small | medium | large
-  cursorFxColor: 'yellow'  // yellow | white | cyan | red
+  cursorFxColor: 'yellow', // yellow | white | cyan | red
+  presets: [
+    { id: 'default-tutorial',      name: 'Tutorial',      quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false },
+    { id: 'default-demo',          name: 'Quick Demo',    quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false },
+    { id: 'default-presentation',  name: 'Presentation',  quality: 'high',   fps: 30, countdown: 5, cam: false, mic: true,  sysAudio: true  }
+  ]
 };
 
 // ─── Persistence paths (set in whenReady) ───
@@ -443,6 +448,24 @@ ipcMain.handle('delete-history-entry', (_, filePath) => {
 
 ipcMain.handle('open-system-pref', (_, url) => {
   shell.openExternal(url);
+});
+
+// ─── Presets ───
+ipcMain.handle('get-presets', () => settings.presets || []);
+
+ipcMain.handle('save-preset', (_, preset) => {
+  if (!preset || typeof preset.name !== 'string' || !preset.name.trim()) throw new Error('Invalid preset name');
+  if (!settings.presets) settings.presets = [];
+  settings.presets.push({ ...preset, name: preset.name.trim(), id: 'preset-' + Date.now() });
+  savePersistedSettings();
+  return settings.presets;
+});
+
+ipcMain.handle('delete-preset', (_, id) => {
+  if (!id || typeof id !== 'string') throw new Error('Invalid preset id');
+  settings.presets = (settings.presets || []).filter(p => p.id !== id);
+  savePersistedSettings();
+  return settings.presets;
 });
 
 ipcMain.handle('get-file-size', (_, filePath) => {
