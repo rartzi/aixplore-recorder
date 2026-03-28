@@ -63,7 +63,12 @@ try {
     historyShowInFinder: function(p) { return ipcRenderer.invoke('history-show-in-finder', p); },
     historyOpenFile: function(p) { return ipcRenderer.invoke('history-open-file', p); },
     getFileSize: function(p) { return ipcRenderer.invoke('get-file-size', p); },
-    openSystemPref: function(url) { return ipcRenderer.invoke('open-system-pref', url); }
+    openSystemPref: function(url) { return ipcRenderer.invoke('open-system-pref', url); },
+
+    // ─── Presets ───
+    getPresets: function() { return ipcRenderer.invoke('get-presets'); },
+    savePreset: function(p) { return ipcRenderer.invoke('save-preset', p); },
+    deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); }
   });
 
   console.log('[preload] electronAPI exposed OK');
