@@ -366,8 +366,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     <div class="preview-area" id="previewArea">
       <video id="screenPreview" autoplay muted playsinline></video>
       <div id="webcamPip" class="webcam-pip hidden"><video id="camPreview" autoplay muted playsinline></video></div>
+      <!-- Cursor spotlight overlay — shows effect live in preview -->
+      <canvas id="spotlightOverlay" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8;"></canvas>
     </div>
-    <div class="control-bar">
+    <div class="control-bar" style="flex-shrink:0;">
       <div id="recDot" class="rec-dot"></div>
       <span id="timer" class="timer">00:00</span>
       <div class="audio-meter"><div id="meterFill" class="audio-meter-fill"></div></div>
@@ -1090,6 +1092,45 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   window.electronAPI.onCursorPos(function(pos) {
     cursorPos = pos;
   });
+
+  // DOM overlay loop — draws spotlight on top of the live preview (separate from compositeCanvas)
+  var overlayActive = false;
+  function drawOverlaySpotlight() {
+    if (!overlayActive) return;
+    var canvas = $('spotlightOverlay');
+    if (!canvas) { requestAnimationFrame(drawOverlaySpotlight); return; }
+    var area = $('previewArea');
+    var W = area.clientWidth, H = area.clientHeight;
+    if (canvas.width !== W) canvas.width = W;
+    if (canvas.height !== H) canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    if (cursorPos && appSettings.clickHighlight !== false) {
+      var vr = getVideoRenderRect();
+      var x = vr.x + cursorPos.normX * vr.w;
+      var y = vr.y + cursorPos.normY * vr.h;
+      var now2 = Date.now();
+      var pp = Math.max(0, 1 - (now2 - lastClickTime) / 400);
+      var spotR = 60 + pp * 35;
+      var grad = ctx.createRadialGradient(x, y, 0, x, y, spotR);
+      grad.addColorStop(0,   'rgba(255, 248, 160, ' + (0.55 + pp * 0.3)  + ')');
+      grad.addColorStop(0.35,'rgba(255, 230, 80,  ' + (0.22 + pp * 0.15) + ')');
+      grad.addColorStop(1,   'rgba(255, 200, 40,  0)');
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, spotR, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      // Cursor ring
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 210, 30, ' + (0.85 + pp * 0.15) + ')';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    requestAnimationFrame(drawOverlaySpotlight);
+  }
   // Clicks (Swift global monitor) — trigger pulse on the existing spotlight
   window.electronAPI.onGlobalClick(function() {
     lastClickTime = Date.now();
@@ -1181,6 +1222,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         };
         mediaRecorder.start(1000);
         showView('viewRecording');isPaused=false;pausedElapsed=0;startTime=Date.now();
+        overlayActive=true; requestAnimationFrame(drawOverlaySpotlight);
         updateTimer();timerInterval=setInterval(updateTimer,250);startAudioMeter();
         window.electronAPI.setRecordingState(true);
       }).catch(function(err){showError('Recording failed: '+err.message);console.error(err);});
@@ -1233,11 +1275,11 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       var baseR  = 55 * scale;
       var spotR  = baseR + pulseProg * 30 * scale;
       var grad = compositeCtx.createRadialGradient(cx2, cy2, 0, cx2, cy2, spotR);
-      var coreAlpha   = 0.28 + pulseProg * 0.22;
-      var midAlpha    = 0.12 + pulseProg * 0.10;
-      grad.addColorStop(0,   'rgba(255, 248, 180, ' + coreAlpha + ')');
-      grad.addColorStop(0.4, 'rgba(255, 240, 120, ' + midAlpha  + ')');
-      grad.addColorStop(1,   'rgba(255, 220,  80, 0)');
+      var coreAlpha   = 0.55 + pulseProg * 0.30;
+      var midAlpha    = 0.22 + pulseProg * 0.15;
+      grad.addColorStop(0,   'rgba(255, 248, 160, ' + coreAlpha + ')');
+      grad.addColorStop(0.4, 'rgba(255, 230,  80, ' + midAlpha  + ')');
+      grad.addColorStop(1,   'rgba(255, 200,  40, 0)');
       compositeCtx.save();
       compositeCtx.beginPath();
       compositeCtx.arc(cx2, cy2, spotR, 0, Math.PI * 2);
@@ -1260,6 +1302,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   }
   function stopRecording(){if(!mediaRecorder||mediaRecorder.state==='inactive')return;mediaRecorder.stop();window.electronAPI.setRecordingState(false);}
   function cleanupRecording(){
+    overlayActive = false;
+    var oc = $('spotlightOverlay'); if (oc) oc.getContext('2d').clearRect(0,0,oc.width,oc.height);
     clickEffects = []; cursorPos = null; lastClickTime = 0;
     if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
     if(drawInterval){clearInterval(drawInterval);drawInterval=null;}
