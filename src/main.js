@@ -59,7 +59,7 @@ function startCursorPoll() {
   cursorPollInterval = setInterval(() => {
     const pos = screen.getCursorScreenPoint();
     const { normX, normY } = normalizeCursorPos(pos);
-    mainWindow?.webContents.send('cursor-pos', { normX, normY });
+    sendToWindow('cursor-pos', { normX, normY });
   }, 33); // ~30fps
 }
 
@@ -89,7 +89,7 @@ function startClickCapture() {
           ) || screen.getPrimaryDisplay();
           const normX = (click.x - d.bounds.x) / d.bounds.width;
           const normY = (click.y - d.bounds.y) / d.bounds.height;
-          mainWindow?.webContents.send('global-click', { normX, normY });
+          sendToWindow('global-click', { normX, normY });
         } catch (e) {}
       }
     });
@@ -229,17 +229,35 @@ async function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
+// Recreate window if destroyed (user closed it), then show+focus.
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  } else {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+// Safe IPC send — skips if window gone or destroyed.
+function sendToWindow(channel, ...args) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, ...args);
+  }
+}
+
 function updateTrayMenu() {
   if (!tray) return;
   const template = [];
 
   if (isRecording) {
-    template.push({ label: '■  Stop Recording',   click: () => mainWindow?.webContents.send('shortcut-stop') });
+    template.push({ label: '■  Stop Recording',   click: () => sendToWindow('shortcut-stop') });
     template.push({ label: isPausedRecording ? '▶  Resume Recording' : '⏸  Pause Recording',
-                    click: () => mainWindow?.webContents.send('shortcut-toggle-pause') });
+                    click: () => sendToWindow('shortcut-toggle-pause') });
   } else {
     template.push({ label: '●  Start Recording',
-                    click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-start-recording'); } });
+                    click: () => { showMainWindow(); sendToWindow('tray-start-recording'); } });
     // Presets submenu
     const presets = settings.presets || [];
     if (presets.length > 0) {
@@ -248,7 +266,7 @@ function updateTrayMenu() {
         label: 'Presets',
         submenu: presets.map(p => ({
           label: p.name,
-          click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-apply-preset', p); }
+          click: () => { showMainWindow(); sendToWindow('tray-apply-preset', p); }
         }))
       });
     }
@@ -262,18 +280,18 @@ function updateTrayMenu() {
     click: (item) => {
       settings.clickHighlight = item.checked;
       savePersistedSettings();
-      mainWindow?.webContents.send('settings-updated', settings);
+      sendToWindow('settings-updated', settings);
     }
   });
 
   if (!isRecording) {
     template.push({ type: 'separator' });
     template.push({ label: 'Settings…',
-                    click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-navigate-to', 'viewSettings'); } });
+                    click: () => { showMainWindow(); sendToWindow('tray-navigate-to', 'viewSettings'); } });
   }
 
   template.push({ type: 'separator' });
-  template.push({ label: 'Show AIXplore Recorder', click: () => { mainWindow?.show(); mainWindow?.focus(); } });
+  template.push({ label: 'Show AIXplore Recorder', click: () => showMainWindow() });
   template.push({ type: 'separator' });
   template.push({ label: 'Quit', click: () => app.quit() });
 
@@ -351,7 +369,7 @@ ipcMain.handle('choose-output-dir', async () => {
   if (!r.canceled && r.filePaths[0]) {
     settings.outputDir = r.filePaths[0];
     savePersistedSettings();
-    mainWindow?.webContents.send('settings-updated', settings);
+    sendToWindow('settings-updated', settings);
     return settings.outputDir;
   }
   return null;
@@ -373,12 +391,12 @@ ipcMain.handle('save-webm-trimmed', async (_, opts) => {
   if (duration <= 0) throw new Error('Invalid trim range');
   ensureDir(); const out = path.join(settings.outputDir, ts('webm'));
   return new Promise((resolve, reject) => {
-    mainWindow?.webContents.send('conversion-status', { status: 'trimming' });
+    sendToWindow('conversion-status', { status: 'trimming' });
     execFile(ffmpegPath, ['-y', '-i', opts.tempPath, '-ss', String(startSec), '-t', String(duration), '-c', 'copy', out],
       { timeout: 120000 }, (err) => {
         try { fs.unlinkSync(opts.tempPath); } catch(e) {}
-        if (err) { mainWindow?.webContents.send('conversion-status', { status: 'error', error: err.message }); reject(err); }
-        else { mainWindow?.webContents.send('conversion-status', { status: 'done' }); resolve(out); }
+        if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+        else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
       });
   });
 });
@@ -397,15 +415,15 @@ ipcMain.handle('save-as-mp4', async (_, opts) => {
   }
   args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out);
   return new Promise((resolve, reject) => {
-    mainWindow?.webContents.send('conversion-status', { status: 'converting' });
+    sendToWindow('conversion-status', { status: 'converting' });
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
       try { fs.unlinkSync(opts.tempPath); } catch(e) {}
-      if (err) { mainWindow?.webContents.send('conversion-status', { status: 'error', error: err.message }); reject(err); }
-      else { mainWindow?.webContents.send('conversion-status', { status: 'done' }); resolve(out); }
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
     });
     if (proc.stderr) proc.stderr.on('data', (d) => {
       const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
-      if (m) mainWindow?.webContents.send('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
     });
   });
 });
@@ -495,9 +513,9 @@ ipcMain.handle('history-open-file', (_, p) => {
 });
 
 function registerShortcuts() {
-  globalShortcut.register('CommandOrControl+Shift+R', () => mainWindow?.webContents.send('shortcut-toggle-record'));
-  globalShortcut.register('CommandOrControl+Shift+P', () => mainWindow?.webContents.send('shortcut-toggle-pause'));
-  globalShortcut.register('Escape', () => mainWindow?.webContents.send('shortcut-stop'));
+  globalShortcut.register('CommandOrControl+Shift+R', () => sendToWindow('shortcut-toggle-record'));
+  globalShortcut.register('CommandOrControl+Shift+P', () => sendToWindow('shortcut-toggle-pause'));
+  globalShortcut.register('Escape', () => sendToWindow('shortcut-stop'));
 }
 
 app.whenReady().then(() => {
