@@ -1351,6 +1351,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   window.electronAPI.onToggleRecord(function(){if(selectedSource&&currentView==='viewPicker')startRecording();});
   window.electronAPI.onTogglePause(function(){togglePause();});
   window.electronAPI.onStop(function(){stopRecording();});
+  window.electronAPI.onTrayStartRecording(function(){ navTo('viewPicker'); });
 
 })();
 </script>

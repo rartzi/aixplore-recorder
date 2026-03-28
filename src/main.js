@@ -9,6 +9,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 app.setName('AIXplore Recorder');
 
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
+let isRecording = false;
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
   autoSave: false,
@@ -128,17 +129,26 @@ async function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
+function updateTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    isRecording
+      ? { label: '■ Stop Recording', click: () => mainWindow?.webContents.send('shortcut-stop') }
+      : { label: '● Start Recording', click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-start-recording'); } },
+    { type: 'separator' },
+    { label: 'Show AIXplore Recorder', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ]));
+}
+
 function createTray() {
   // 22x22 colored PNG: white screen outline + red record dot
   const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAABd0lEQVR4nO2Uv0oDQRDGkxATSERBhCA2FhGEgIVFmhF8Cwv5wNYnsLGzsLf1HQRT2QqWKtooNgFBc0kuf0RRNCa5T/ZuE8zlLt5dZeHAxw23s7+d2Z3dWOzf3EYyT/KEpBFBal7eDxwVOoT7gQcBhZCVFgZzJ4LDQAPNDQOmIEFBkoKUrV7PYN+KDqYgTsEUBRkKZimYs/X6VuXHZ1WPxUOBNVRlOENBjoIlCpZtPdXrbD7X9FhqBB4ArEqfpmCBgnUKjim4pqDE86sWy4+mHlMxyUBgnW2agnkKVigoU8Chtna7vLxt6gpUTDooOKH3VWWEEehAN/cNClZ1TGYM7NXHGpylYJGC7QngNR2T/Qn2v3l9y7BP3WzVeFdu2KW7t6LbLfll7P9WWJbBzleV7ZcaHyomzy7aPDh6585+x/5WzFPuHW567vFv5uoKdYBFCja0ivrfeFcEAPv3sePnPPs4BHz85jl+xvPmhVxg9K1w/ERk4J+wb13LTacdh/auAAAAAElFTkSuQmCC');
   // No setTemplateImage — keeps colors on both light and dark menu bars
   tray = new Tray(icon);
   tray.setToolTip('AIXplore Recorder');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show', click: () => mainWindow?.show() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ]));
+  updateTrayMenu();
 }
 
 function setTrayRec(on) {
@@ -156,7 +166,7 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => setTrayRec(on));
+ipcMain.on('set-recording-state', (_, on) => { isRecording = on; setTrayRec(on); updateTrayMenu(); });
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───

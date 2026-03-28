@@ -55,6 +55,7 @@ try {
     onToggleRecord: function(cb) { ipcRenderer.on('shortcut-toggle-record', function() { cb(); }); },
     onTogglePause: function(cb) { ipcRenderer.on('shortcut-toggle-pause', function() { cb(); }); },
     onStop: function(cb) { ipcRenderer.on('shortcut-stop', function() { cb(); }); },
+    onTrayStartRecording: function(cb) { ipcRenderer.on('tray-start-recording', function() { cb(); }); },
 
     // ─── History ───
     getHistory: function() { return ipcRenderer.invoke('get-history'); },
