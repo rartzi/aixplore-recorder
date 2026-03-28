@@ -19,7 +19,7 @@ let recordingSourceBounds = null; // {x,y,w,h} in logical coords — set when re
 // Returns a Promise that resolves to {x,y,w,h} or null if unavailable.
 function queryWindowBounds(windowId) {
   return new Promise((resolve) => {
-    const binPath = path.join(__dirname, 'click-capture');
+    const binPath = getClickCapturePath();
     if (!fs.existsSync(binPath)) return resolve(null);
     execFile(binPath, ['--window-id', String(windowId)], { timeout: 3000 }, (err, stdout) => {
       if (err || !stdout.trim()) return resolve(null);
@@ -68,9 +68,17 @@ function stopCursorPoll() {
   recordingSourceBounds = null;
 }
 
+function getClickCapturePath() {
+  // In packaged app, binary lives in Resources/ (extraResources).
+  // In dev, it sits alongside main.js in src/.
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'click-capture')
+    : path.join(__dirname, 'click-capture');
+}
+
 function startClickCapture() {
   if (clickCaptureProc) return;
-  const binPath = path.join(__dirname, 'click-capture');
+  const binPath = getClickCapturePath();
   if (!fs.existsSync(binPath)) { console.log('[click-capture] binary missing'); return; }
   try {
     clickCaptureProc = spawn(binPath, [], { stdio: ['ignore', 'pipe', 'ignore'] });

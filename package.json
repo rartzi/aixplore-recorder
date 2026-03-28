@@ -21,6 +21,9 @@
     "appId": "com.aixplore.recorder",
     "productName": "AIXplore Recorder",
     "afterSign": "build/notarize.cjs",
+    "extraResources": [
+      { "from": "src/click-capture", "to": "click-capture" }
+    ],
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
