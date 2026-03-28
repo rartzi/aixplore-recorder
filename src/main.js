@@ -129,9 +129,9 @@ async function createWindow() {
 }
 
 function createTray() {
-  // 22x22 template PNG: inner filled circle + outer ring (record-button style)
-  const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAVElEQVR4nGNgGI7gDg5MdQMpsoBYTSQZTqpLiFKPTdF/HJgkw4k1FJfhRLmWkKHohuN09ajBQ9hgBlolN1y2UiWDEK2IXPU0KYTQNVG12CTGgmEGAIKon9lj9gZlAAAAAElFTkSuQmCC');
-  icon.setTemplateImage(true); // adapts to light/dark menu bar automatically
+  // 22x22 colored PNG: white screen outline + red record dot
+  const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAABd0lEQVR4nO2Uv0oDQRDGkxATSERBhCA2FhGEgIVFmhF8Cwv5wNYnsLGzsLf1HQRT2QqWKtooNgFBc0kuf0RRNCa5T/ZuE8zlLt5dZeHAxw23s7+d2Z3dWOzf3EYyT/KEpBFBal7eDxwVOoT7gQcBhZCVFgZzJ4LDQAPNDQOmIEFBkoKUrV7PYN+KDqYgTsEUBRkKZimYs/X6VuXHZ1WPxUOBNVRlOENBjoIlCpZtPdXrbD7X9FhqBB4ArEqfpmCBgnUKjim4pqDE86sWy4+mHlMxyUBgnW2agnkKVigoU8Chtna7vLxt6gpUTDooOKH3VWWEEehAN/cNClZ1TGYM7NXHGpylYJGC7QngNR2T/Qn2v3l9y7BP3WzVeFdu2KW7t6LbLfll7P9WWJbBzleV7ZcaHyomzy7aPDh6585+x/5WzFPuHW567vFv5uoKdYBFCja0ivrfeFcEAPv3sePnPPs4BHz85jl+xvPmhVxg9K1w/ERk4J+wb13LTacdh/auAAAAAElFTkSuQmCC');
+  // No setTemplateImage — keeps colors on both light and dark menu bars
   tray = new Tray(icon);
   tray.setToolTip('AIXplore Recorder');
   tray.setContextMenu(Menu.buildFromTemplate([
