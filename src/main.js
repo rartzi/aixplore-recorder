@@ -6,6 +6,8 @@ const os = require('os');
 const { execFile } = require('child_process');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
+app.setName('AIXplore Recorder');
+
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
