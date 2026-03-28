@@ -1,14 +1,104 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, dialog,
-        globalShortcut, Tray, Menu, shell, nativeImage, session } = require('electron');
+        globalShortcut, Tray, Menu, shell, nativeImage, session, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
 app.setName('AIXplore Recorder');
 
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
+let clickCaptureProc = null;
+let cursorPollInterval = null;
+let recordingSourceBounds = null; // {x,y,w,h} in logical coords — set when recording starts
+
+// Query CGWindowListCopyWindowInfo for a window source's logical bounds.
+// Returns a Promise that resolves to {x,y,w,h} or null if unavailable.
+function queryWindowBounds(windowId) {
+  return new Promise((resolve) => {
+    const binPath = path.join(__dirname, 'click-capture');
+    if (!fs.existsSync(binPath)) return resolve(null);
+    execFile(binPath, ['--window-id', String(windowId)], { timeout: 3000 }, (err, stdout) => {
+      if (err || !stdout.trim()) return resolve(null);
+      try {
+        const info = JSON.parse(stdout.trim());
+        if (info.type === 'window_bounds' && info.w > 0)
+          resolve({ x: info.x, y: info.y, w: info.w, h: info.h });
+        else resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  });
+}
+
+function normalizeCursorPos(pos) {
+  if (recordingSourceBounds) {
+    // Window source: normalize relative to the captured window's bounds
+    const b = recordingSourceBounds;
+    return {
+      normX: Math.max(0, Math.min(1, (pos.x - b.x) / b.w)),
+      normY: Math.max(0, Math.min(1, (pos.y - b.y) / b.h))
+    };
+  }
+  // Screen source: normalize relative to the display the cursor is on
+  const displays = screen.getAllDisplays();
+  const d = displays.find(d =>
+    pos.x >= d.bounds.x && pos.x < d.bounds.x + d.bounds.width &&
+    pos.y >= d.bounds.y && pos.y < d.bounds.y + d.bounds.height
+  ) || screen.getPrimaryDisplay();
+  return {
+    normX: (pos.x - d.bounds.x) / d.bounds.width,
+    normY: (pos.y - d.bounds.y) / d.bounds.height
+  };
+}
+
+function startCursorPoll() {
+  if (cursorPollInterval) return;
+  cursorPollInterval = setInterval(() => {
+    const pos = screen.getCursorScreenPoint();
+    const { normX, normY } = normalizeCursorPos(pos);
+    mainWindow?.webContents.send('cursor-pos', { normX, normY });
+  }, 33); // ~30fps
+}
+
+function stopCursorPoll() {
+  if (cursorPollInterval) { clearInterval(cursorPollInterval); cursorPollInterval = null; }
+  recordingSourceBounds = null;
+}
+
+function startClickCapture() {
+  if (clickCaptureProc) return;
+  const binPath = path.join(__dirname, 'click-capture');
+  if (!fs.existsSync(binPath)) { console.log('[click-capture] binary missing'); return; }
+  try {
+    clickCaptureProc = spawn(binPath, [], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let buf = '';
+    clickCaptureProc.stdout.on('data', (data) => {
+      buf += data.toString();
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const click = JSON.parse(line);
+          const displays = screen.getAllDisplays();
+          const d = displays.find(d =>
+            click.x >= d.bounds.x && click.x < d.bounds.x + d.bounds.width &&
+            click.y >= d.bounds.y && click.y < d.bounds.y + d.bounds.height
+          ) || screen.getPrimaryDisplay();
+          const normX = (click.x - d.bounds.x) / d.bounds.width;
+          const normY = (click.y - d.bounds.y) / d.bounds.height;
+          mainWindow?.webContents.send('global-click', { normX, normY });
+        } catch (e) {}
+      }
+    });
+    clickCaptureProc.on('exit', () => { clickCaptureProc = null; });
+    console.log('[click-capture] started pid:', clickCaptureProc.pid);
+  } catch (e) { console.log('[click-capture] error:', e.message); clickCaptureProc = null; }
+}
+
+function stopClickCapture() {
+  if (clickCaptureProc) { clickCaptureProc.kill(); clickCaptureProc = null; }
+}
 let settings = {
   outputDir: path.join(app.getPath('videos'), 'AIXplore Recordings'),
   autoSave: false,
@@ -16,7 +106,10 @@ let settings = {
   fps: 30,
   countdown: 3,
   audioDeviceId: null,
-  theme: 'system'
+  theme: 'system',
+  clickHighlight: true,
+  cursorFxSize: 'medium',  // small | medium | large
+  cursorFxColor: 'yellow'  // yellow | white | cyan | red
 };
 
 // ─── Persistence paths (set in whenReady) ───
@@ -156,7 +249,25 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => setTrayRec(on));
+ipcMain.on('set-recording-state', (_, on) => {
+  setTrayRec(on);
+  if (on) {
+    // For window sources (id = "window:12345:0"), resolve bounds before polling
+    const windowMatch = selectedSourceId && selectedSourceId.match(/^window:(\d+)/);
+    if (windowMatch) {
+      queryWindowBounds(parseInt(windowMatch[1])).then(bounds => {
+        recordingSourceBounds = bounds;
+        console.log('[cursor] source bounds:', bounds);
+        startClickCapture(); startCursorPoll();
+      });
+    } else {
+      recordingSourceBounds = null;
+      startClickCapture(); startCursorPoll();
+    }
+  } else {
+    stopClickCapture(); stopCursorPoll();
+  }
+});
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───
@@ -169,6 +280,9 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.countdown === 'number') settings.countdown = s.countdown;
   if (s && (typeof s.audioDeviceId === 'string' || s.audioDeviceId === null)) settings.audioDeviceId = s.audioDeviceId;
   if (s && typeof s.theme === 'string') settings.theme = s.theme;
+  if (s && typeof s.clickHighlight === 'boolean') settings.clickHighlight = s.clickHighlight;
+  if (s && typeof s.cursorFxSize === 'string') settings.cursorFxSize = s.cursorFxSize;
+  if (s && typeof s.cursorFxColor === 'string') settings.cursorFxColor = s.cursorFxColor;
   savePersistedSettings();
   return settings;
 });
@@ -310,6 +424,6 @@ app.whenReady().then(() => {
   createTray();
   registerShortcuts();
 });
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopClickCapture(); stopCursorPoll(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
