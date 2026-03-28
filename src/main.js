@@ -112,6 +112,7 @@ let settings = {
   clickHighlight: true,
   cursorFxSize: 'medium',  // small | medium | large
   cursorFxColor: 'yellow', // yellow | white | cyan | red
+  defaultPresetId: '',     // preset ID to auto-apply on picker open
   presets: [
     { id: 'default-tutorial',      name: 'Tutorial',      quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false },
     { id: 'default-demo',          name: 'Quick Demo',    quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false },
@@ -341,6 +342,7 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.clickHighlight === 'boolean') settings.clickHighlight = s.clickHighlight;
   if (s && typeof s.cursorFxSize === 'string') settings.cursorFxSize = s.cursorFxSize;
   if (s && typeof s.cursorFxColor === 'string') settings.cursorFxColor = s.cursorFxColor;
+  if (s && typeof s.defaultPresetId === 'string') settings.defaultPresetId = s.defaultPresetId;
   savePersistedSettings();
   return settings;
 });
@@ -464,6 +466,16 @@ ipcMain.handle('save-preset', (_, preset) => {
 ipcMain.handle('delete-preset', (_, id) => {
   if (!id || typeof id !== 'string') throw new Error('Invalid preset id');
   settings.presets = (settings.presets || []).filter(p => p.id !== id);
+  if (settings.defaultPresetId === id) settings.defaultPresetId = '';
+  savePersistedSettings();
+  return settings.presets;
+});
+
+ipcMain.handle('update-preset', (_, updated) => {
+  if (!updated || typeof updated.id !== 'string') throw new Error('Invalid preset');
+  const idx = (settings.presets || []).findIndex(p => p.id === updated.id);
+  if (idx === -1) throw new Error('Preset not found');
+  settings.presets[idx] = { ...settings.presets[idx], ...updated };
   savePersistedSettings();
   return settings.presets;
 });
