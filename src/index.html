@@ -1342,6 +1342,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     if(!mediaRecorder||mediaRecorder.state==='inactive')return;
     if(isPaused){mediaRecorder.resume();isPaused=false;startTime=Date.now()-pausedElapsed;$('btnPause').textContent='PAUSE';$('recDot').classList.remove('paused');}
     else{mediaRecorder.pause();isPaused=true;pausedElapsed=Date.now()-startTime;$('btnPause').textContent='RESUME';$('recDot').classList.add('paused');}
+    window.electronAPI.setPauseState(isPaused);
   }
   function stopRecording(){if(!mediaRecorder||mediaRecorder.state==='inactive')return;mediaRecorder.stop();window.electronAPI.setRecordingState(false);}
   function cleanupRecording(){
@@ -1502,10 +1503,13 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     else if(s.status==='converting')$('convText').textContent='Converting to MP4...';
     else if(s.status==='trimming')$('convText').textContent='Trimming...';
   });
-  window.electronAPI.onSettingsUpdated(function(s){appSettings=s;$('outputPath').textContent=s.outputDir;});
+  window.electronAPI.onSettingsUpdated(function(s){ applySettingsToUI(s); $('outputPath').textContent=s.outputDir; });
   window.electronAPI.onToggleRecord(function(){if(selectedSource&&currentView==='viewPicker')startRecording();});
   window.electronAPI.onTogglePause(function(){togglePause();});
   window.electronAPI.onStop(function(){stopRecording();});
+  window.electronAPI.onTrayStartRecording(function(){ navTo('viewPicker'); });
+  window.electronAPI.onTrayNavigateTo(function(viewId){ navTo(viewId); });
+  window.electronAPI.onTrayApplyPreset(function(preset){ applyPreset(preset); navTo('viewPicker'); });
 
 })();
 </script>

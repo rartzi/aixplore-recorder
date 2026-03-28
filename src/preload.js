@@ -55,8 +55,12 @@ try {
     onToggleRecord: function(cb) { ipcRenderer.on('shortcut-toggle-record', function() { cb(); }); },
     onTogglePause: function(cb) { ipcRenderer.on('shortcut-toggle-pause', function() { cb(); }); },
     onStop: function(cb) { ipcRenderer.on('shortcut-stop', function() { cb(); }); },
-    onGlobalClick: function(cb) { ipcRenderer.on('global-click', function(_, coords) { cb(coords); }); },
-    onCursorPos:   function(cb) { ipcRenderer.on('cursor-pos',   function(_, pos)    { cb(pos);    }); },
+    onGlobalClick:         function(cb) { ipcRenderer.on('global-click',         function(_, c) { cb(c); }); },
+    onCursorPos:           function(cb) { ipcRenderer.on('cursor-pos',           function(_, p) { cb(p); }); },
+    onTrayStartRecording:  function(cb) { ipcRenderer.on('tray-start-recording', function()     { cb();  }); },
+    onTrayApplyPreset:     function(cb) { ipcRenderer.on('tray-apply-preset',    function(_, p) { cb(p); }); },
+    onTrayNavigateTo:      function(cb) { ipcRenderer.on('tray-navigate-to',     function(_, v) { cb(v); }); },
+    setPauseState:         function(p)  { ipcRenderer.send('set-pause-state', p); },
 
     // ─── History ───
     getHistory: function() { return ipcRenderer.invoke('get-history'); },

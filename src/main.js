@@ -9,6 +9,8 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 app.setName('AIXplore Recorder');
 
 let mainWindow, tray, blinkInterval, selectedSourceId = null;
+let isRecording = false;
+let isPausedRecording = false;
 let clickCaptureProc = null;
 let cursorPollInterval = null;
 let recordingSourceBounds = null; // {x,y,w,h} in logical coords — set when recording starts
@@ -221,17 +223,64 @@ async function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
+function updateTrayMenu() {
+  if (!tray) return;
+  const template = [];
+
+  if (isRecording) {
+    template.push({ label: '■  Stop Recording',   click: () => mainWindow?.webContents.send('shortcut-stop') });
+    template.push({ label: isPausedRecording ? '▶  Resume Recording' : '⏸  Pause Recording',
+                    click: () => mainWindow?.webContents.send('shortcut-toggle-pause') });
+  } else {
+    template.push({ label: '●  Start Recording',
+                    click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-start-recording'); } });
+    // Presets submenu
+    const presets = settings.presets || [];
+    if (presets.length > 0) {
+      template.push({ type: 'separator' });
+      template.push({
+        label: 'Presets',
+        submenu: presets.map(p => ({
+          label: p.name,
+          click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-apply-preset', p); }
+        }))
+      });
+    }
+  }
+
+  template.push({ type: 'separator' });
+  template.push({
+    label: 'Cursor FX',
+    type: 'checkbox',
+    checked: settings.clickHighlight !== false,
+    click: (item) => {
+      settings.clickHighlight = item.checked;
+      savePersistedSettings();
+      mainWindow?.webContents.send('settings-updated', settings);
+    }
+  });
+
+  if (!isRecording) {
+    template.push({ type: 'separator' });
+    template.push({ label: 'Settings…',
+                    click: () => { mainWindow?.show(); mainWindow?.focus(); mainWindow?.webContents.send('tray-navigate-to', 'viewSettings'); } });
+  }
+
+  template.push({ type: 'separator' });
+  template.push({ label: 'Show AIXplore Recorder', click: () => { mainWindow?.show(); mainWindow?.focus(); } });
+  template.push({ type: 'separator' });
+  template.push({ label: 'Quit', click: () => app.quit() });
+
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
 function createTray() {
   // 22x22 colored PNG: white screen outline + red record dot
   const icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAABd0lEQVR4nO2Uv0oDQRDGkxATSERBhCA2FhGEgIVFmhF8Cwv5wNYnsLGzsLf1HQRT2QqWKtooNgFBc0kuf0RRNCa5T/ZuE8zlLt5dZeHAxw23s7+d2Z3dWOzf3EYyT/KEpBFBal7eDxwVOoT7gQcBhZCVFgZzJ4LDQAPNDQOmIEFBkoKUrV7PYN+KDqYgTsEUBRkKZimYs/X6VuXHZ1WPxUOBNVRlOENBjoIlCpZtPdXrbD7X9FhqBB4ArEqfpmCBgnUKjim4pqDE86sWy4+mHlMxyUBgnW2agnkKVigoU8Chtna7vLxt6gpUTDooOKH3VWWEEehAN/cNClZ1TGYM7NXHGpylYJGC7QngNR2T/Qn2v3l9y7BP3WzVeFdu2KW7t6LbLfll7P9WWJbBzleV7ZcaHyomzy7aPDh6585+x/5WzFPuHW567vFv5uoKdYBFCja0ivrfeFcEAPv3sePnPPs4BHz85jl+xvPmhVxg9K1w/ERk4J+wb13LTacdh/auAAAAAElFTkSuQmCC');
   // No setTemplateImage — keeps colors on both light and dark menu bars
   tray = new Tray(icon);
   tray.setToolTip('AIXplore Recorder');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show', click: () => mainWindow?.show() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ]));
+  updateTrayMenu();
 }
 
 function setTrayRec(on) {
@@ -250,9 +299,11 @@ ipcMain.handle('get-sources', async () => {
 });
 
 ipcMain.on('set-recording-state', (_, on) => {
+  isRecording = on;
+  if (!on) isPausedRecording = false;
   setTrayRec(on);
+  updateTrayMenu();
   if (on) {
-    // For window sources (id = "window:12345:0"), resolve bounds before polling
     const windowMatch = selectedSourceId && selectedSourceId.match(/^window:(\d+)/);
     if (windowMatch) {
       queryWindowBounds(parseInt(windowMatch[1])).then(bounds => {
@@ -268,6 +319,8 @@ ipcMain.on('set-recording-state', (_, on) => {
     stopClickCapture(); stopCursorPoll();
   }
 });
+
+ipcMain.on('set-pause-state', (_, paused) => { isPausedRecording = paused; updateTrayMenu(); });
 ipcMain.on('set-selected-source', (_, id) => { selectedSourceId = id; console.log('[main] selected source:', id); });
 
 // ─── Settings ───
