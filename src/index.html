@@ -63,11 +63,9 @@ body::before { content: ''; position: fixed; inset: 0; background: var(--bloom);
 }
 .sidebar-icon {
   width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-h) 100%);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 1px 6px rgba(123,111,240,0.35);
+  overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.3);
 }
-.sidebar-icon svg { width: 14px; height: 14px; color: #fff; }
+.sidebar-icon img { width: 28px; height: 28px; display: block; }
 .sidebar-brand-name { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; text-transform: none; }
 .nav-btn {
   display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
@@ -271,8 +269,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 .perm-note { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: var(--dim); line-height: 1.5; }
 /* ─── About page ─── */
 .about-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 16px 0; }
-.about-app-icon { width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-h) 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(123,111,240,0.35); margin-bottom: 12px; }
-.about-app-icon svg { width: 34px; height: 34px; color: #fff; }
+.about-app-icon { width: 80px; height: 80px; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 28px rgba(0,0,0,0.35); margin-bottom: 12px; }
+.about-app-icon img { width: 80px; height: 80px; display: block; }
 .about-title { font-size: 18px; font-weight: 700; margin-bottom: 3px; }
 .about-version { display: inline-block; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; color: var(--dim); margin-bottom: 6px; }
 .about-tagline { font-size: 12px; color: var(--dim); margin-bottom: 20px; text-align: center; }
@@ -300,7 +298,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   <!-- Brand -->
   <div class="sidebar-brand" onclick="navTo('viewDashboard')">
     <div class="sidebar-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+      <img src="../assets/icon-1024.png" alt="AIXplore Recorder" />
     </div>
     <span class="sidebar-brand-name">AIXplore</span>
   </div>
@@ -595,7 +593,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     <div class="scrollable">
       <div class="about-wrap">
         <div class="about-app-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="white" stroke="none"/></svg>
+          <img src="../assets/icon-1024.png" alt="AIXplore Recorder" />
         </div>
         <div class="about-title">AIXplore Recorder</div>
         <span class="about-version">Version 3.0.0</span>
