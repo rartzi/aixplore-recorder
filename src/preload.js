@@ -12,7 +12,7 @@ try {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     getSources: function() { return ipcRenderer.invoke('get-sources'); },
-    setRecordingState: function(on) { ipcRenderer.send('set-recording-state', on); },
+    setRecordingState: function(on, audioOnly) { ipcRenderer.send('set-recording-state', on, audioOnly || false); },
     setSelectedSource: function(id) { ipcRenderer.send('set-selected-source', id); },
     getSettings: function() { return ipcRenderer.invoke('get-settings'); },
     setSettings: function(s) { return ipcRenderer.invoke('set-settings', s); },
@@ -48,6 +48,10 @@ try {
     saveWebmInstant: function() { return ipcRenderer.invoke('save-webm-instant', _tempPath); },
     saveWebmTrimmed: function(opts) { return ipcRenderer.invoke('save-webm-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
     saveAsMp4: function(opts) { return ipcRenderer.invoke('save-as-mp4', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAudioInstant: function() { return ipcRenderer.invoke('save-audio-instant', _tempPath); },
+    saveAudioTrimmed: function(opts) { return ipcRenderer.invoke('save-audio-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
+    saveAsMp3: function(opts) { return ipcRenderer.invoke('convert-to-mp3', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAsM4a: function(opts) { return ipcRenderer.invoke('convert-to-m4a', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
 
     showInFinder: function(p) { return ipcRenderer.invoke('show-in-finder', p); },
     openFile: function(p) { return ipcRenderer.invoke('open-file', p); },
@@ -55,6 +59,12 @@ try {
     onToggleRecord: function(cb) { ipcRenderer.on('shortcut-toggle-record', function() { cb(); }); },
     onTogglePause: function(cb) { ipcRenderer.on('shortcut-toggle-pause', function() { cb(); }); },
     onStop: function(cb) { ipcRenderer.on('shortcut-stop', function() { cb(); }); },
+    onGlobalClick:         function(cb) { ipcRenderer.on('global-click',         function(_, c) { cb(c); }); },
+    onCursorPos:           function(cb) { ipcRenderer.on('cursor-pos',           function(_, p) { cb(p); }); },
+    onTrayStartRecording:  function(cb) { ipcRenderer.on('tray-start-recording', function()     { cb();  }); },
+    onTrayApplyPreset:     function(cb) { ipcRenderer.on('tray-apply-preset',    function(_, p) { cb(p); }); },
+    onTrayNavigateTo:      function(cb) { ipcRenderer.on('tray-navigate-to',     function(_, v) { cb(v); }); },
+    setPauseState:         function(p)  { ipcRenderer.send('set-pause-state', p); },
 
     // ─── History ───
     getHistory: function() { return ipcRenderer.invoke('get-history'); },
@@ -63,7 +73,13 @@ try {
     historyShowInFinder: function(p) { return ipcRenderer.invoke('history-show-in-finder', p); },
     historyOpenFile: function(p) { return ipcRenderer.invoke('history-open-file', p); },
     getFileSize: function(p) { return ipcRenderer.invoke('get-file-size', p); },
-    openSystemPref: function(url) { return ipcRenderer.invoke('open-system-pref', url); }
+    openSystemPref: function(url) { return ipcRenderer.invoke('open-system-pref', url); },
+
+    // ─── Presets ───
+    getPresets: function() { return ipcRenderer.invoke('get-presets'); },
+    savePreset: function(p) { return ipcRenderer.invoke('save-preset', p); },
+    deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); },
+    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); }
   });
 
   console.log('[preload] electronAPI exposed OK');
