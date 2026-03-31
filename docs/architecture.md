@@ -27,35 +27,48 @@ Acts as a secure bridge using Electron's `contextBridge` API. Exposes a `window.
 
 ### Renderer Process (`src/index.html`)
 
-A single HTML file containing all UI markup, CSS styles, and JavaScript logic. Manages three views:
+A single HTML file containing all UI markup, CSS styles, and JavaScript logic. Manages six recording-related views plus navigation:
 
-1. **Source Picker** — Grid of available screens/windows with input toggles
-2. **Recording View** — Live preview with control bar
-3. **Trim View** — Video playback with trim sliders and export buttons
+1. **Source Picker** — Mode toggle (Video / Audio Only), source grid, input toggles, preset selector
+2. **Recording View** — Live screen preview with canvas compositor and control bar
+3. **Audio Recording View** — Waveform visualizer (30 frequency bars via `AnalyserNode`) and control bar
+4. **Trim View** — Video playback with trim sliders and export buttons
+5. **Audio Trim View** — Audio player with trim sliders; export to WebM, MP3, or M4A
+6. **Dashboard / History / Settings / Permissions / About** — Navigation views
 
-## Recording Pipeline
+## Recording Pipelines
 
-![Recording Pipeline](images/recording-pipeline.png)
+### Video + Audio pipeline
 
-The canvas compositor runs at 25fps, drawing the screen capture as the base layer and overlaying the webcam feed as a circular PiP. The webcam is rendered with:
+The canvas compositor runs at the configured FPS (24/30/60), drawing the screen capture as the base layer and overlaying the webcam feed as a circular PiP. The webcam is rendered with:
 - Circular clipping mask
 - Horizontal mirror transform
 - Purple border stroke
 - Position based on drag coordinates
 
-Both audio sources feed into an `AudioContext` destination node. An `AnalyserNode` taps the combined signal to drive the real-time audio level meter in the UI.
+Both audio sources (screen loopback and microphone) feed into an `AudioContext` destination node. An `AnalyserNode` taps the combined signal to drive the real-time audio level meter. The final `MediaRecorder` input is a composite stream of the canvas video tracks and the merged audio destination tracks. Format: `video/webm;codecs=vp9,opus`.
+
+### Audio-only pipeline
+
+When Audio Only mode is active, `getDisplayMedia` is skipped entirely. A single `getUserMedia({ audio })` call captures the selected microphone. The audio stream connects to an `AudioContext` destination node and an `AnalyserNode` whose `getByteFrequencyData` output drives the waveform visualizer (30 bars grouped across frequency bins). The `MediaRecorder` records the audio destination stream directly. Format: `audio/webm;codecs=opus` (falls back to `audio/webm`).
+
+System audio loopback is not available in audio-only mode — macOS loopback requires a `getDisplayMedia` session.
 
 ## Export Pipeline
 
-![Export Pipelines](images/export-pipeline.png)
+Five export paths are available across video and audio modes:
 
-Three export paths are available:
+| Path | IPC handler | FFmpeg | Output |
+|---|---|---|---|
+| WebM Instant (video) | `save-webm-instant` | No — file copy | `AIXplore-…webm` |
+| WebM Trimmed (video) | `save-webm-trimmed` | `-c copy` | `AIXplore-…webm` |
+| MP4 | `save-as-mp4` | `libx264` + `aac` | `AIXplore-…mp4` |
+| Audio WebM Instant | `save-audio-instant` | No — file copy | `AIXplore-Audio-…webm` |
+| Audio WebM Trimmed | `save-audio-trimmed` | `-c copy` | `AIXplore-Audio-…webm` |
+| MP3 | `convert-to-mp3` | `libmp3lame` 192k | `AIXplore-Audio-…mp3` |
+| M4A | `convert-to-m4a` | `aac` 192k + `+faststart` | `AIXplore-Audio-…m4a` |
 
-- **WebM Instant** — No re-encoding. The raw blob is streamed to a temp file, then copied to the output path. Fastest option.
-- **WebM Trimmed** — Uses FFmpeg stream copy (`-c copy`) for fast, lossless trimming. No re-encoding.
-- **MP4 Conversion** — Full transcode via FFmpeg: `libx264` ultrafast preset at CRF 28, `aac` at 128k, with `+faststart` for web-optimized playback.
-
-Conversion progress is reported back to the renderer via IPC for UI updates.
+All paths stream the recorded blob to a cryptographically-named temp file first (`preload.js: initTempFile / writeChunk / finalizeTempFile`), then invoke the appropriate main-process IPC handler. Conversion progress is reported back to the renderer via `conversion-status` IPC events.
 
 ## Security Model
 
@@ -74,10 +87,11 @@ Conversion progress is reported back to the renderer via IPC for UI updates.
 ## File Naming Convention
 
 ```
-AIXplore-YYYY-MM-DD_HHhMMmSSs.{webm|mp4}
+AIXplore-YYYY-MM-DD_HHhMMmSSs.{webm|mp4}        ← video recordings
+AIXplore-Audio-YYYY-MM-DD_HHhMMmSSs.{webm|mp3|m4a} ← audio-only recordings
 ```
 
-Generated in the main process using the local system clock at save time.
+Generated in the main process (`ts()` / `tsAudio()`) using the local system clock at save time. The `AIXplore-Audio-` prefix distinguishes audio-only files in Finder, history, and `isValidHistoryFilePath` path validation.
 
 ## Dependencies
 
@@ -85,6 +99,7 @@ Generated in the main process using the local system clock at save time.
 |---|---|
 | `electron` | Desktop application framework |
 | `electron-builder` | Build and package for macOS distribution |
-| `@ffmpeg-installer/ffmpeg` | Bundled FFmpeg binary for trimming and conversion |
+| `@ffmpeg-installer/ffmpeg` | Bundled FFmpeg binary for trimming and all audio/video conversion |
+| `@playwright/test` | Automated UI tests (dev dependency) |
 
 No runtime UI frameworks or libraries. The entire UI is vanilla HTML/CSS/JS.
