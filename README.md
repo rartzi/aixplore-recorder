@@ -17,7 +17,7 @@
 
 ---
 
-AIXplore Recorder is a lightweight, native desktop application for recording your screen with optional webcam overlay, microphone input, and system audio capture. Built with Electron, it delivers a polished recording experience with real-time preview, video trimming, and MP4 export — all in a single, focused tool.
+AIXplore Recorder is a lightweight, native desktop application for recording your screen or capturing audio — with optional webcam overlay, microphone input, and system audio capture. Built with Electron, it delivers a polished recording experience with real-time preview, trimming, and multiple export formats — all in a single, focused tool.
 
 <p align="center">
   <img src="docs/screenshots/app-screenshot.png" alt="AIXplore Recorder - Source Picker" width="720" />
@@ -30,15 +30,17 @@ AIXplore Recorder is a lightweight, native desktop application for recording you
 ## Features
 
 - **Screen & Window Capture** — Record any screen or individual application window
+- **Audio-Only Recording** — Capture microphone audio without a screen source — ideal for discussions, interviews, and meetings
 - **Webcam Picture-in-Picture** — Circular, draggable webcam overlay in three sizes (S/M/L)
-- **Audio Capture** — Microphone and system audio, with real-time audio level meter
+- **Audio Capture** — Microphone and system audio loopback, with real-time level meter and waveform visualizer
 - **Countdown Timer** — Optional 3s or 5s countdown before recording starts
 - **Pause & Resume** — Pause recordings mid-session and resume seamlessly
-- **Video Trimming** — Set start/end points before saving, with live preview
-- **Multiple Export Formats** — Save as WebM (instant) or convert to MP4 via FFmpeg
+- **Video & Audio Trimming** — Set start/end points before saving, with live preview
+- **Multiple Export Formats** — Save as WebM (instant), trimmed WebM, MP4, MP3, or M4A via FFmpeg
+- **Recording Presets** — One-click setting profiles; save custom presets for any workflow
 - **Keyboard Shortcuts** — `Ctrl+Shift+R` to record, `Ctrl+Shift+P` to pause, `Esc` to stop
-- **System Tray** — Tray icon with blinking indicator during active recording
-- **Configurable Output** — Choose your save directory; auto-save option available
+- **System Tray** — Quick-start video or audio recording directly from the menu bar; blinking indicator during active recording
+- **Configurable Output** — Choose your save directory; select your audio input device
 
 ## Quick Start
 
@@ -71,11 +73,18 @@ This produces a macOS `.dmg` in the `dist/` directory using electron-builder.
 
 ## Usage
 
+### Video + Audio recording
 1. **Select a source** — Choose a screen or window from the source picker
 2. **Configure inputs** — Toggle webcam, microphone, and system audio; set countdown
 3. **Record** — Click **Start Recording** or press `Ctrl+Shift+R`
 4. **Review & trim** — After stopping, adjust start/end trim points
-5. **Export** — Save as WebM (instant), trimmed WebM, or convert to MP4
+5. **Export** — Save as WebM (instant), trimmed WebM, or MP4
+
+### Audio-only recording
+1. **Switch mode** — Click **🎙 Audio Only** at the top of the picker (or use the tray)
+2. **Record** — Click **Start Audio Recording** — no screen source needed
+3. **Review & trim** — Adjust trim points on the audio player
+4. **Export** — Save as WebM, trimmed WebM, MP3, or M4A
 
 For detailed instructions, see the [User Guide](docs/user-guide.md).
 

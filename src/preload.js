@@ -12,7 +12,7 @@ try {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     getSources: function() { return ipcRenderer.invoke('get-sources'); },
-    setRecordingState: function(on) { ipcRenderer.send('set-recording-state', on); },
+    setRecordingState: function(on, audioOnly) { ipcRenderer.send('set-recording-state', on, audioOnly || false); },
     setSelectedSource: function(id) { ipcRenderer.send('set-selected-source', id); },
     getSettings: function() { return ipcRenderer.invoke('get-settings'); },
     setSettings: function(s) { return ipcRenderer.invoke('set-settings', s); },
@@ -48,6 +48,10 @@ try {
     saveWebmInstant: function() { return ipcRenderer.invoke('save-webm-instant', _tempPath); },
     saveWebmTrimmed: function(opts) { return ipcRenderer.invoke('save-webm-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
     saveAsMp4: function(opts) { return ipcRenderer.invoke('save-as-mp4', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAudioInstant: function() { return ipcRenderer.invoke('save-audio-instant', _tempPath); },
+    saveAudioTrimmed: function(opts) { return ipcRenderer.invoke('save-audio-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
+    saveAsMp3: function(opts) { return ipcRenderer.invoke('convert-to-mp3', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAsM4a: function(opts) { return ipcRenderer.invoke('convert-to-m4a', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
 
     showInFinder: function(p) { return ipcRenderer.invoke('show-in-finder', p); },
     openFile: function(p) { return ipcRenderer.invoke('open-file', p); },

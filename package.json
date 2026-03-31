@@ -9,8 +9,14 @@
     "build": "electron-builder --mac",
     "build:unsigned": "electron-builder --mac --config.mac.identity=null --config.afterSign=''"
   },
-  "devDependencies": { "electron": "^35.0.0", "electron-builder": "^26.0.0" },
-  "dependencies": { "@ffmpeg-installer/ffmpeg": "^1.1.0" },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0"
+  },
   "overrides": {
     "@electron/asar": "^4.0.1",
     "global-agent": "^4.1.2",
@@ -21,7 +27,9 @@
     "appId": "com.aixplore.recorder",
     "productName": "AIXplore Recorder",
     "afterSign": "build/notarize.cjs",
-    "electronLanguages": ["en"],
+    "electronLanguages": [
+      "en"
+    ],
     "files": [
       "src/**/*",
       "assets/**/*",
@@ -31,7 +39,10 @@
       "!**/MEMORY/**"
     ],
     "extraResources": [
-      { "from": "src/click-capture", "to": "click-capture" }
+      {
+        "from": "src/click-capture",
+        "to": "click-capture"
+      }
     ],
     "mac": {
       "icon": "assets/icon.icns",
@@ -42,7 +53,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["universal"]
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "x64ArchFiles": "**/node_modules/@ffmpeg-installer/**",
@@ -57,8 +70,16 @@
     "dmg": {
       "title": "AIXplore Recorder",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   }

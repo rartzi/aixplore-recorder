@@ -123,9 +123,10 @@ let settings = {
   cursorFxColor: 'yellow', // yellow | white | cyan | red
   defaultPresetId: '',     // preset ID to auto-apply on picker open
   presets: [
-    { id: 'default-tutorial',      name: 'Tutorial',      quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false },
-    { id: 'default-demo',          name: 'Quick Demo',    quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false },
-    { id: 'default-presentation',  name: 'Presentation',  quality: 'high',   fps: 30, countdown: 5, cam: false, mic: true,  sysAudio: true  }
+    { id: 'default-tutorial',      name: 'Tutorial',         quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false, audioOnly: false },
+    { id: 'default-demo',          name: 'Quick Demo',       quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false, audioOnly: false },
+    { id: 'default-presentation',  name: 'Presentation',     quality: 'high',   fps: 30, countdown: 5, cam: false, mic: true,  sysAudio: true,  audioOnly: false },
+    { id: 'default-audio',         name: 'Audio Recording',  quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false, audioOnly: true  }
   ]
 };
 
@@ -141,6 +142,19 @@ function loadPersistedSettings() {
       Object.assign(settings, saved);
     }
   } catch (e) { console.log('[main] settings load error:', e.message); }
+  // Migration: ensure built-in default presets that may be missing from older settings.json
+  const builtins = [
+    { id: 'default-audio', name: 'Audio Recording', quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true, sysAudio: false, audioOnly: true }
+  ];
+  if (!settings.presets) settings.presets = [];
+  let changed = false;
+  builtins.forEach(function(bp) {
+    if (!settings.presets.find(function(p) { return p.id === bp.id; })) {
+      settings.presets.push(bp); changed = true;
+      console.log('[main] migrated default preset:', bp.name);
+    }
+  });
+  if (changed) savePersistedSettings();
 }
 
 function savePersistedSettings() {
@@ -151,6 +165,11 @@ function ts(ext) {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `AIXplore-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s.${ext}`;
+}
+function tsAudio(ext) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `AIXplore-Audio-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s.${ext}`;
 }
 function ensureDir() { if (!fs.existsSync(settings.outputDir)) fs.mkdirSync(settings.outputDir, { recursive: true }); }
 
@@ -171,7 +190,7 @@ function isValidOutputPath(p) {
 function isValidHistoryFilePath(p) {
   if (!p || typeof p !== 'string') return false;
   const base = path.basename(p);
-  return /^AIXplore-\d{4}-\d{2}-\d{2}_\d{2}h\d{2}m\d{2}s\.(webm|mp4)$/.test(base);
+  return /^AIXplore(-Audio)?-\d{4}-\d{2}-\d{2}_\d{2}h\d{2}m\d{2}s\.(webm|mp4|mp3|m4a)$/.test(base);
 }
 
 function sanitizeNumber(val) {
@@ -265,8 +284,16 @@ function updateTrayMenu() {
     template.push({ label: isPausedRecording ? '▶  Resume Recording' : '⏸  Pause Recording',
                     click: () => sendToWindow('shortcut-toggle-pause') });
   } else {
-    template.push({ label: '●  Start Recording',
+    template.push({ label: '🎥  Video + Audio',
                     click: () => { showMainWindow(); sendToWindow('tray-start-recording'); } });
+    template.push({ label: '🎙  Audio Only',
+                    click: () => {
+                      showMainWindow();
+                      sendToWindow('tray-apply-preset', (settings.presets || []).find(p => p.audioOnly) || {
+                        id: 'default-audio', name: 'Audio Recording', quality: 'medium',
+                        fps: 30, countdown: 0, cam: false, mic: true, sysAudio: false, audioOnly: true
+                      });
+                    } });
     // Presets submenu
     const presets = settings.presets || [];
     if (presets.length > 0) {
@@ -274,7 +301,7 @@ function updateTrayMenu() {
       template.push({
         label: 'Presets',
         submenu: presets.map(p => ({
-          label: p.name,
+          label: (p.audioOnly ? '🎙 ' : '🎥 ') + p.name,
           click: () => { showMainWindow(); sendToWindow('tray-apply-preset', p); }
         }))
       });
@@ -333,12 +360,12 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => {
+ipcMain.on('set-recording-state', (_, on, audioOnly) => {
   isRecording = on;
   if (!on) isPausedRecording = false;
   setTrayRec(on);
   updateTrayMenu();
-  if (on) {
+  if (on && !audioOnly) {
     const windowMatch = selectedSourceId && selectedSourceId.match(/^window:(\d+)/);
     if (windowMatch) {
       queryWindowBounds(parseInt(windowMatch[1])).then(bounds => {
@@ -350,7 +377,7 @@ ipcMain.on('set-recording-state', (_, on) => {
       recordingSourceBounds = null;
       startClickCapture(); startCursorPoll();
     }
-  } else {
+  } else if (!on) {
     stopClickCapture(); stopCursorPoll();
   }
 });
@@ -425,6 +452,86 @@ ipcMain.handle('save-as-mp4', async (_, opts) => {
     args.push('-ss', String(startSec), '-t', String(duration));
   }
   args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out);
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
+});
+
+// ─── Save: audio-only instant WebM ───
+ipcMain.handle('save-audio-instant', async (_, tempPath) => {
+  if (!isValidTempPath(tempPath)) throw new Error('Invalid temp file path');
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('webm'));
+  fs.copyFileSync(tempPath, out); try { fs.unlinkSync(tempPath); } catch(e) {}
+  console.log('[main] saved audio:', out); return out;
+});
+
+// ─── Save: audio-only trimmed WebM ───
+ipcMain.handle('save-audio-trimmed', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const duration = sanitizeNumber(opts.endSec) - startSec;
+  if (duration <= 0) throw new Error('Invalid trim range');
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('webm'));
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'trimming' });
+    execFile(ffmpegPath, ['-y', '-i', opts.tempPath, '-ss', String(startSec), '-t', String(duration), '-c', 'copy', out],
+      { timeout: 120000 }, (err) => {
+        try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+        if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+        else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+      });
+  });
+});
+
+// ─── Save: MP3 ───
+ipcMain.handle('convert-to-mp3', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const endSec   = sanitizeNumber(opts.endSec);
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('mp3'));
+  const args = ['-y', '-i', opts.tempPath];
+  if (opts.trimmed) {
+    const duration = endSec - startSec;
+    if (duration <= 0) throw new Error('Invalid trim range');
+    args.push('-ss', String(startSec), '-t', String(duration));
+  }
+  args.push('-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100', out);
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
+});
+
+// ─── Save: M4A ───
+ipcMain.handle('convert-to-m4a', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const endSec   = sanitizeNumber(opts.endSec);
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('m4a'));
+  const args = ['-y', '-i', opts.tempPath];
+  if (opts.trimmed) {
+    const duration = endSec - startSec;
+    if (duration <= 0) throw new Error('Invalid trim range');
+    args.push('-ss', String(startSec), '-t', String(duration));
+  }
+  args.push('-vn', '-acodec', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
   return new Promise((resolve, reject) => {
     sendToWindow('conversion-status', { status: 'converting' });
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
