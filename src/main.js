@@ -597,6 +597,21 @@ ipcMain.handle('delete-history-entry', (_, filePath) => {
   return history;
 });
 
+ipcMain.handle('delete-history-entries', (_, filePaths) => {
+  if (!Array.isArray(filePaths)) throw new Error('Expected array of file paths');
+  let history = [];
+  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
+  const pathSet = new Set(filePaths);
+  history = history.filter(e => !pathSet.has(e.filePath));
+  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+  filePaths.forEach(fp => {
+    if (isValidHistoryFilePath(fp)) {
+      try { fs.unlinkSync(fp); } catch (e) {}
+    }
+  });
+  return history;
+});
+
 ipcMain.handle('open-system-pref', (_, url) => {
   shell.openExternal(url);
 });

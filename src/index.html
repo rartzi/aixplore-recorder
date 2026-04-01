@@ -223,6 +223,18 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 .history-row .hr-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .history-row .hr-meta { font-size: 11px; color: var(--dim); margin-top: 2px; }
 .history-row .hr-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-select-mode { font-size: 12px; padding: 4px 12px; background: transparent; color: var(--dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.btn-select-mode:hover { color: var(--accent); border-color: var(--accent); }
+.btn-select-mode.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#bulkActionBar { position: sticky; bottom: 0; background: var(--surface2); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; display: none; }
+#bulkActionBar .bulk-count { font-size: 13px; color: var(--text); font-weight: 500; }
+#bulkActionBar .bulk-select-all { font-size: 12px; color: var(--accent); cursor: pointer; background: none; border: none; text-decoration: underline; }
+#bulkActionBar .bulk-select-all:hover { color: var(--accent-h); }
+.history-row.selectable { cursor: pointer; }
+.history-row .hr-checkbox { display: none; align-items: center; margin-right: 8px; }
+.history-row.selectable .hr-checkbox { display: flex; align-items: center; }
+.history-row.selectable .hr-actions { display: none; }
+.hr-checkbox input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 200px; color: var(--dim); font-size: 14px; }
 .empty-state svg { width: 40px; height: 40px; opacity: 0.3; }
 
@@ -518,9 +530,16 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     </div>
     <div class="history-toolbar">
       <input type="text" class="search-input" id="historySearch" placeholder="Search recordings…" />
+      <button class="btn-select-mode" id="btnSelectMode">Select</button>
     </div>
     <div class="scrollable">
       <div class="history-list" id="historyList"></div>
+    </div>
+    <div id="bulkActionBar">
+      <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button class="bulk-select-all" id="bulkSelectAll">Select All</button>
+      <div style="flex:1;"></div>
+      <button class="btn-tiny" id="bulkDeleteBtn" style="color:var(--red);border-color:var(--red);">Delete</button>
     </div>
   </div>
 
@@ -900,6 +919,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 
   // ─── History ───
   var historyFilter = '';
+  var selectMode = false;
 
   function loadHistory() {
     window.electronAPI.getHistory().then(function(history) {
@@ -935,8 +955,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
     var row = document.createElement('div');
-    row.className = 'history-row';
-    row.innerHTML = '<span class="hr-badge ' + (isAudio && ext === 'webm' ? 'webm' : ext) + '">' + esc(badgeLabel) + '</span>' +
+    row.className = 'history-row' + (selectMode ? ' selectable' : '');
+    row.dataset.filePath = e.filePath || '';
+    row.innerHTML = '<label class="hr-checkbox"><input type="checkbox" /></label>' +
+      '<span class="hr-badge ' + (isAudio && ext === 'webm' ? 'webm' : ext) + '">' + esc(badgeLabel) + '</span>' +
       '<div class="rc-icon" style="width:36px;height:36px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:' + (isAudio ? 'var(--yellow)' : 'var(--accent)') + ';">' + iconSvg + '</div>' +
       '<div class="hr-info">' +
         '<div class="hr-name">' + esc(name) + '</div>' +
@@ -947,13 +969,21 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         '<button class="btn-tiny" data-action="finder">Finder</button>' +
         '<button class="btn-tiny" data-action="delete" style="color:var(--red);">Delete</button>' +
       '</div>';
-    var path = e.filePath;
+    var filePath = e.filePath;
     row.querySelectorAll('[data-action]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(path).catch(function(){});
-        else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(path).catch(function(){});
-        else if (btn.dataset.action === 'delete') deleteHistoryEntry(path, row);
+        if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(){});
+        else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(){});
+        else if (btn.dataset.action === 'delete') deleteHistoryEntry(filePath, row);
       });
+    });
+    var cb = row.querySelector('.hr-checkbox input');
+    cb.addEventListener('change', updateBulkCount);
+    row.addEventListener('click', function(ev) {
+      if (!selectMode) return;
+      if (ev.target.tagName === 'INPUT') return;
+      cb.checked = !cb.checked;
+      updateBulkCount();
     });
     return row;
   }
@@ -966,6 +996,61 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       $('historyCount').textContent = historyCache.length + ' recording' + (historyCache.length !== 1 ? 's' : '');
     }).catch(function(e) { alert('Delete failed: ' + e.message); });
   }
+
+  // ─── Bulk select mode ───
+
+  function enterSelectMode() {
+    selectMode = true;
+    $('btnSelectMode').textContent = 'Cancel';
+    $('btnSelectMode').classList.add('active');
+    document.querySelectorAll('.history-row').forEach(function(r) { r.classList.add('selectable'); });
+    updateBulkCount();
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    $('btnSelectMode').textContent = 'Select';
+    $('btnSelectMode').classList.remove('active');
+    document.querySelectorAll('.history-row').forEach(function(r) {
+      r.classList.remove('selectable');
+      var cb = r.querySelector('.hr-checkbox input');
+      if (cb) cb.checked = false;
+    });
+    $('bulkActionBar').style.display = 'none';
+  }
+
+  function updateBulkCount() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var count = checked.length;
+    $('bulkCount').textContent = count + ' selected';
+    $('bulkActionBar').style.display = (selectMode && count > 0) ? 'flex' : 'none';
+    $('bulkDeleteBtn').textContent = 'Delete' + (count > 0 ? ' (' + count + ')' : '');
+  }
+
+  $('btnSelectMode').addEventListener('click', function() {
+    if (selectMode) exitSelectMode(); else enterSelectMode();
+  });
+
+  $('bulkSelectAll').addEventListener('click', function() {
+    document.querySelectorAll('.history-row .hr-checkbox input').forEach(function(cb) { cb.checked = true; });
+    updateBulkCount();
+  });
+
+  $('bulkDeleteBtn').addEventListener('click', function() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var paths = [];
+    checked.forEach(function(cb) {
+      var row = cb.closest('.history-row');
+      if (row && row.dataset.filePath) paths.push(row.dataset.filePath);
+    });
+    if (paths.length === 0) return;
+    if (!confirm('Delete ' + paths.length + ' recording' + (paths.length !== 1 ? 's' : '') + '? Files will be removed from disk.')) return;
+    window.electronAPI.deleteHistoryEntries(paths).then(function(updated) {
+      historyCache = updated;
+      exitSelectMode();
+      renderHistory();
+    }).catch(function(e) { alert('Delete failed: ' + e.message); });
+  });
 
   $('historySearch').addEventListener('input', function() {
     historyFilter = this.value;
