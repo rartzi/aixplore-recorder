@@ -360,6 +360,19 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
+// Returns the first physical screen source ID — used by audio-only mode to
+// force loopback on Screen 1 instead of a stale window selectedSourceId
+ipcMain.handle('get-primary-screen-id', async () => {
+  try {
+    const screens = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
+    console.log('[main] get-primary-screen-id: found', screens.length, 'screen(s):', screens.map(s => s.name));
+    return screens.length > 0 ? screens[0].id : null;
+  } catch (err) {
+    console.error('[main] get-primary-screen-id error:', err);
+    return null;
+  }
+});
+
 ipcMain.on('set-recording-state', (_, on, audioOnly) => {
   isRecording = on;
   if (!on) isPausedRecording = false;
