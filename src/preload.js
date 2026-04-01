@@ -12,6 +12,7 @@ try {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     getSources: function() { return ipcRenderer.invoke('get-sources'); },
+    getPrimaryScreenId: function() { return ipcRenderer.invoke('get-primary-screen-id'); },
     setRecordingState: function(on, audioOnly) { ipcRenderer.send('set-recording-state', on, audioOnly || false); },
     setSelectedSource: function(id) { ipcRenderer.send('set-selected-source', id); },
     getSettings: function() { return ipcRenderer.invoke('get-settings'); },
