@@ -70,6 +70,21 @@ Five export paths are available across video and audio modes:
 
 All paths stream the recorded blob to a cryptographically-named temp file first (`preload.js: initTempFile / writeChunk / finalizeTempFile`), then invoke the appropriate main-process IPC handler. Conversion progress is reported back to the renderer via `conversion-status` IPC events.
 
+All seven save handlers call `copyToSecondaryDir(out)` after a successful save. If `settings.secondaryOutputDir` is configured and the folder exists, the saved file is copied there. Failures are silently logged.
+
+## History Management
+
+| IPC handler | Description |
+|---|---|
+| `get-history` | Returns the full history array from `history.json` |
+| `add-history-entry` | Prepends a new entry (with server-side `fileSize` lookup) |
+| `delete-history-entry` | Removes a single entry and deletes the file from disk |
+| `delete-history-entries` | Bulk delete — accepts an array of file paths, removes all matching entries and files in one write |
+| `choose-export-dir` | Opens a folder picker and returns the selected directory path |
+| `export-recordings` | Copies an array of recording files to a destination folder (skips existing, never overwrites) |
+| `choose-secondary-dir` | Opens a folder picker, saves the selected path as `secondaryOutputDir` in settings |
+| `clear-secondary-dir` | Sets `secondaryOutputDir` to null in settings |
+
 ## Security Model
 
 - `contextIsolation: true` — Renderer cannot access Node.js globals

@@ -41,6 +41,9 @@ AIXplore Recorder is a lightweight, native desktop application for recording you
 - **Keyboard Shortcuts** — `Ctrl+Shift+R` to record, `Ctrl+Shift+P` to pause, `Esc` to stop
 - **System Tray** — Quick-start video or audio recording directly from the menu bar; blinking indicator during active recording
 - **Configurable Output** — Choose your save directory; select your audio input device
+- **Bulk Delete** — Multi-select recordings in History and delete them all at once
+- **Export to Folder** — Copy selected recordings to any folder without removing originals
+- **Auto-Copy on Save** — Configure a secondary output folder that receives a copy of every recording automatically
 
 ## Quick Start
 

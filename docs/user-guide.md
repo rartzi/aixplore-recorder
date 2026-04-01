@@ -18,6 +18,9 @@ This guide covers everything you need to know to record, edit, and export with A
 - [Recording Presets](#recording-presets)
 - [System Tray](#system-tray)
 - [Settings](#settings)
+- [Bulk Delete](#bulk-delete)
+- [Export to Folder](#export-to-folder)
+- [Auto-Copy on Save](#auto-copy-on-save)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 
@@ -326,6 +329,56 @@ The directory is created automatically if it doesn't exist.
 ### Auto-Save
 
 When enabled in settings, recordings are saved automatically without showing the trim view.
+
+## Bulk Delete
+
+Delete multiple recordings at once from the History view.
+
+1. Open the **History** view from the sidebar
+2. Click the **Select** button in the toolbar (top right)
+3. Check individual recordings or click **Select All** in the action bar
+4. A floating action bar appears at the bottom showing the count of selected items
+5. Click **Delete (N)** to remove all selected recordings
+6. Confirm the deletion in the dialog — files are permanently removed from disk
+7. Click **Cancel** to exit select mode without deleting
+
+---
+
+## Export to Folder
+
+Copy selected recordings to another folder without removing them from the original location.
+
+1. Enter select mode by clicking **Select** in the History toolbar
+2. Check the recordings you want to export
+3. Click **Export (N)** in the action bar
+4. Choose a destination folder in the file picker
+5. The app copies each selected file to the destination — existing files with the same name are skipped
+6. A summary shows how many files were exported, skipped, or not found
+
+---
+
+## Auto-Copy on Save
+
+Automatically copy every new recording to a secondary folder as soon as it is saved. Useful for syncing recordings to a shared drive, backup folder, or cloud-synced directory.
+
+### Setting up
+
+1. Open **Settings** from the sidebar
+2. Under **Output**, find **Secondary Output Folder**
+3. Click **Choose...** and select the target folder
+4. The path is displayed next to the label
+
+### How it works
+
+- Every time a recording is saved (any format — WebM, MP4, MP3, M4A), a copy is automatically placed in the secondary folder
+- If the secondary folder does not exist or is unreachable, the copy is silently skipped — the primary save always succeeds
+- Files with the same name already in the secondary folder are not overwritten
+
+### Removing the secondary folder
+
+Click **Clear** next to the path to disable auto-copy.
+
+---
 
 ## Keyboard Shortcuts
 
