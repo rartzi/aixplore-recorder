@@ -612,6 +612,30 @@ ipcMain.handle('delete-history-entries', (_, filePaths) => {
   return history;
 });
 
+ipcMain.handle('choose-export-dir', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (!r.canceled && r.filePaths[0]) return r.filePaths[0];
+  return null;
+});
+
+ipcMain.handle('export-recordings', (_, opts) => {
+  if (!opts || !Array.isArray(opts.filePaths) || !opts.destDir) throw new Error('Invalid export options');
+  const destDir = opts.destDir;
+  if (!fs.existsSync(destDir)) throw new Error('Destination folder does not exist');
+  let exported = 0, skipped = 0, errors = 0;
+  opts.filePaths.forEach(fp => {
+    if (!isValidHistoryFilePath(fp)) { errors++; return; }
+    const dest = path.join(destDir, path.basename(fp));
+    if (fs.existsSync(dest)) { skipped++; return; }
+    try {
+      if (!fs.existsSync(fp)) { errors++; return; }
+      fs.copyFileSync(fp, dest);
+      exported++;
+    } catch (e) { errors++; }
+  });
+  return { exported, skipped, errors };
+});
+
 ipcMain.handle('open-system-pref', (_, url) => {
   shell.openExternal(url);
 });
