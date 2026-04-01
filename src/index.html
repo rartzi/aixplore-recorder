@@ -539,6 +539,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       <span class="bulk-count" id="bulkCount">0 selected</span>
       <button class="bulk-select-all" id="bulkSelectAll">Select All</button>
       <div style="flex:1;"></div>
+      <button class="btn-tiny" id="bulkExportBtn">Export</button>
       <button class="btn-tiny" id="bulkDeleteBtn" style="color:var(--red);border-color:var(--red);">Delete</button>
     </div>
   </div>
@@ -1025,6 +1026,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     $('bulkCount').textContent = count + ' selected';
     $('bulkActionBar').style.display = (selectMode && count > 0) ? 'flex' : 'none';
     $('bulkDeleteBtn').textContent = 'Delete' + (count > 0 ? ' (' + count + ')' : '');
+    $('bulkExportBtn').textContent = 'Export' + (count > 0 ? ' (' + count + ')' : '');
   }
 
   $('btnSelectMode').addEventListener('click', function() {
@@ -1050,6 +1052,26 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       exitSelectMode();
       renderHistory();
     }).catch(function(e) { alert('Delete failed: ' + e.message); });
+  });
+
+  $('bulkExportBtn').addEventListener('click', function() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var paths = [];
+    checked.forEach(function(cb) {
+      var row = cb.closest('.history-row');
+      if (row && row.dataset.filePath) paths.push(row.dataset.filePath);
+    });
+    if (paths.length === 0) return;
+    window.electronAPI.chooseExportDir().then(function(destDir) {
+      if (!destDir) return;
+      window.electronAPI.exportRecordings({ filePaths: paths, destDir: destDir }).then(function(result) {
+        var total = paths.length;
+        var msg = 'Exported ' + result.exported + ' of ' + total + ' recording' + (total !== 1 ? 's' : '') + ' to ' + destDir;
+        if (result.errors > 0) msg += '\n' + result.errors + ' file' + (result.errors !== 1 ? 's' : '') + ' not found';
+        if (result.skipped > 0) msg += '\n' + result.skipped + ' already existed (skipped)';
+        alert(msg);
+      }).catch(function(e) { alert('Export failed: ' + e.message); });
+    }).catch(function() {});
   });
 
   $('historySearch').addEventListener('input', function() {
