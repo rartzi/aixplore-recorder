@@ -412,6 +412,7 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.cursorFxSize === 'string') settings.cursorFxSize = s.cursorFxSize;
   if (s && typeof s.cursorFxColor === 'string') settings.cursorFxColor = s.cursorFxColor;
   if (s && typeof s.defaultPresetId === 'string') settings.defaultPresetId = s.defaultPresetId;
+  if (s && (typeof s.secondaryOutputDir === 'string' || s.secondaryOutputDir === null)) settings.secondaryOutputDir = s.secondaryOutputDir;
   savePersistedSettings();
   return settings;
 });
@@ -426,12 +427,43 @@ ipcMain.handle('choose-output-dir', async () => {
   return null;
 });
 
+// ─── Secondary output copy ───
+function copyToSecondaryDir(savedPath) {
+  try {
+    const dir = settings.secondaryOutputDir;
+    if (!dir || typeof dir !== 'string') return;
+    if (!fs.existsSync(dir)) return;
+    const dest = path.join(dir, path.basename(savedPath));
+    if (fs.existsSync(dest)) return;
+    fs.copyFileSync(savedPath, dest);
+    console.log('[main] secondary copy:', dest);
+  } catch (e) { console.warn('[main] secondary copy failed:', e.message); }
+}
+
+ipcMain.handle('choose-secondary-dir', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (!r.canceled && r.filePaths[0]) {
+    settings.secondaryOutputDir = r.filePaths[0];
+    savePersistedSettings();
+    sendToWindow('settings-updated', settings);
+    return r.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('clear-secondary-dir', () => {
+  settings.secondaryOutputDir = null;
+  savePersistedSettings();
+  sendToWindow('settings-updated', settings);
+  return null;
+});
+
 // ─── Save: instant WebM ───
 ipcMain.handle('save-webm-instant', async (_, tempPath) => {
   if (!isValidTempPath(tempPath)) throw new Error('Invalid temp file path');
   ensureDir(); const out = path.join(settings.outputDir, ts('webm'));
   fs.copyFileSync(tempPath, out); try { fs.unlinkSync(tempPath); } catch(e) {}
-  console.log('[main] saved:', out); return out;
+  console.log('[main] saved:', out); copyToSecondaryDir(out); return out;
 });
 
 // ─── Save: trimmed WebM ───
@@ -447,7 +479,7 @@ ipcMain.handle('save-webm-trimmed', async (_, opts) => {
       { timeout: 120000 }, (err) => {
         try { fs.unlinkSync(opts.tempPath); } catch(e) {}
         if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-        else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+        else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
       });
   });
 });
@@ -470,7 +502,7 @@ ipcMain.handle('save-as-mp4', async (_, opts) => {
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
       try { fs.unlinkSync(opts.tempPath); } catch(e) {}
       if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
     });
     if (proc.stderr) proc.stderr.on('data', (d) => {
       const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
@@ -484,7 +516,7 @@ ipcMain.handle('save-audio-instant', async (_, tempPath) => {
   if (!isValidTempPath(tempPath)) throw new Error('Invalid temp file path');
   ensureDir(); const out = path.join(settings.outputDir, tsAudio('webm'));
   fs.copyFileSync(tempPath, out); try { fs.unlinkSync(tempPath); } catch(e) {}
-  console.log('[main] saved audio:', out); return out;
+  console.log('[main] saved audio:', out); copyToSecondaryDir(out); return out;
 });
 
 // ─── Save: audio-only trimmed WebM ───
@@ -500,7 +532,7 @@ ipcMain.handle('save-audio-trimmed', async (_, opts) => {
       { timeout: 120000 }, (err) => {
         try { fs.unlinkSync(opts.tempPath); } catch(e) {}
         if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-        else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+        else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
       });
   });
 });
@@ -523,7 +555,7 @@ ipcMain.handle('convert-to-mp3', async (_, opts) => {
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
       try { fs.unlinkSync(opts.tempPath); } catch(e) {}
       if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
     });
     if (proc.stderr) proc.stderr.on('data', (d) => {
       const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
@@ -550,7 +582,7 @@ ipcMain.handle('convert-to-m4a', async (_, opts) => {
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
       try { fs.unlinkSync(opts.tempPath); } catch(e) {}
       if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
     });
     if (proc.stderr) proc.stderr.on('data', (d) => {
       const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);

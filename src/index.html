@@ -574,6 +574,14 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
               <button class="btn-tiny" id="settingsBtnChangeDir">Change</button>
             </div>
           </div>
+          <div class="setting-row">
+            <div><div class="sr-label">Secondary Output Folder</div><div class="sr-sub">Auto-copy every recording to a second folder</div></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="settingsSecondaryPath" class="path-display" style="max-width:200px;">Not set</span>
+              <button class="btn-tiny" id="settingsBtnSecondaryDir">Choose…</button>
+              <button class="btn-tiny" id="settingsBtnClearSecondary" style="color:var(--red);">Clear</button>
+            </div>
+          </div>
         </div>
         <div class="settings-section">
           <h3>Recording Quality</h3>
@@ -1091,6 +1099,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       if ($('settingsClickFx')) $('settingsClickFx').classList.toggle('active', s.clickHighlight !== false);
       if ($('settingsCursorSize') && s.cursorFxSize) $('settingsCursorSize').value = s.cursorFxSize;
       if ($('settingsCursorColor') && s.cursorFxColor) $('settingsCursorColor').value = s.cursorFxColor;
+      $('settingsSecondaryPath').textContent = s.secondaryOutputDir || 'Not set';
       populateAudioDevices(s.audioDeviceId);
     });
   }
@@ -1131,6 +1140,18 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   $('settingsBtnChangeDir').addEventListener('click', function() {
     window.electronAPI.chooseOutputDir().then(function(d) {
       if (d) { $('settingsOutputPath').textContent = d; $('outputPath').textContent = d; }
+    });
+  });
+
+  $('settingsBtnSecondaryDir').addEventListener('click', function() {
+    window.electronAPI.chooseSecondaryDir().then(function(d) {
+      if (d) $('settingsSecondaryPath').textContent = d;
+    });
+  });
+
+  $('settingsBtnClearSecondary').addEventListener('click', function() {
+    window.electronAPI.clearSecondaryDir().then(function() {
+      $('settingsSecondaryPath').textContent = 'Not set';
     });
   });
 
