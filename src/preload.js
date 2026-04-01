@@ -74,6 +74,8 @@ try {
     deleteHistoryEntries: function(paths) { return ipcRenderer.invoke('delete-history-entries', paths); },
     chooseExportDir: function() { return ipcRenderer.invoke('choose-export-dir'); },
     exportRecordings: function(opts) { return ipcRenderer.invoke('export-recordings', opts); },
+    chooseSecondaryDir: function() { return ipcRenderer.invoke('choose-secondary-dir'); },
+    clearSecondaryDir: function() { return ipcRenderer.invoke('clear-secondary-dir'); },
     historyShowInFinder: function(p) { return ipcRenderer.invoke('history-show-in-finder', p); },
     historyOpenFile: function(p) { return ipcRenderer.invoke('history-open-file', p); },
     getFileSize: function(p) { return ipcRenderer.invoke('get-file-size', p); },
