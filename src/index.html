@@ -1783,7 +1783,9 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     var wantSys = $('toggleSys') ? $('toggleSys').classList.contains('active') : false;
     var deviceId = getAudioDeviceId();
     var audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-    if (deviceId) audioConstraints.deviceId = { exact: deviceId };
+    // Use 'ideal' not 'exact' so AirPods/Bluetooth mics are used when connected
+    // even if a different device was saved in settings
+    if (deviceId) audioConstraints.deviceId = { ideal: deviceId };
     var countdownSec = parseInt($('countdownSel').value) || 0;
 
     var doStart = function() {
