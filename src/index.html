@@ -870,8 +870,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       list.innerHTML = '';
       recent.forEach(function(e) { list.appendChild(makeRecentCard(e)); });
     }).catch(function() {
-      $('dashTotal').textContent = '0';
-      $('dashRecentList').innerHTML = '<div class="empty-state"><span>No recordings yet</span></div>';
+      if ($('dashTotal')) $('dashTotal').textContent = '0';
+      if ($('dashRecentList')) $('dashRecentList').innerHTML = '<div class="empty-state"><span>No recordings yet</span></div>';
     });
   }
 
