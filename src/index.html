@@ -1761,7 +1761,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     $('modeVideo').classList.toggle('active', !isAudio);
     $('modeAudio').classList.toggle('active', isAudio);
     $('pickerTitle').textContent = isAudio ? 'Record Audio' : 'Choose a source to record';
-    $('pickerSub').textContent   = isAudio ? 'Capture mic only, or enable System Audio to record call conversations (Zoom, Teams, WhatsApp).' : 'Select a screen or window, configure settings, then hit Start.';
+    $('pickerSub').textContent   = isAudio ? 'Capture mic only, or enable System Audio to silently capture call audio (Zoom, Teams, WhatsApp) — no screen picker shown.' : 'Select a screen or window, configure settings, then hit Start.';
     $('sourceGrid').classList.toggle('hidden', isAudio);
     $('camToggleGroup') && $('camToggleGroup').classList.toggle('hidden', isAudio);
     // System Audio toggle is shown in audio mode too — enables call recording (Path A)
@@ -1800,6 +1800,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       sysPromise
         .then(function(displayStream) {
           audioDisplayStream = displayStream;
+          // Immediately stop video tracks — system audio only, nothing is displayed or recorded
+          if (audioDisplayStream) {
+            audioDisplayStream.getVideoTracks().forEach(function(t){ t.stop(); });
+          }
           // Step 2: capture mic
           return navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
         })
