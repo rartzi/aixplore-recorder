@@ -72,6 +72,7 @@ try {
     addHistoryEntry: function(entry) { return ipcRenderer.invoke('add-history-entry', entry); },
     deleteHistoryEntry: function(filePath) { return ipcRenderer.invoke('delete-history-entry', filePath); },
     deleteHistoryEntries: function(paths) { return ipcRenderer.invoke('delete-history-entries', paths); },
+    convertHistoryFile: function(opts) { return ipcRenderer.invoke('convert-history-file', opts); },
     chooseExportDir: function() { return ipcRenderer.invoke('choose-export-dir'); },
     exportRecordings: function(opts) { return ipcRenderer.invoke('export-recordings', opts); },
     chooseSecondaryDir: function() { return ipcRenderer.invoke('choose-secondary-dir'); },

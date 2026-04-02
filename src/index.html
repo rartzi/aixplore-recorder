@@ -976,6 +976,9 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       '<div class="hr-actions">' +
         '<button class="btn-tiny" data-action="play">Play</button>' +
         '<button class="btn-tiny" data-action="finder">Finder</button>' +
+        (ext === 'webm' && !isAudio ? '<button class="btn-tiny" data-action="to-mp4" style="color:var(--accent);">→ MP4</button>' : '') +
+        (ext === 'webm' && isAudio  ? '<button class="btn-tiny" data-action="to-mp3" style="color:var(--accent);">→ MP3</button>' +
+                                      '<button class="btn-tiny" data-action="to-m4a" style="color:var(--accent);">→ M4A</button>' : '') +
         '<button class="btn-tiny" data-action="delete" style="color:var(--red);">Delete</button>' +
       '</div>';
     var filePath = e.filePath;
@@ -984,6 +987,9 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(){});
         else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(){});
         else if (btn.dataset.action === 'delete') deleteHistoryEntry(filePath, row);
+        else if (btn.dataset.action === 'to-mp4') convertHistoryFile(filePath, 'mp4', row, e);
+        else if (btn.dataset.action === 'to-mp3') convertHistoryFile(filePath, 'mp3', row, e);
+        else if (btn.dataset.action === 'to-m4a') convertHistoryFile(filePath, 'm4a', row, e);
       });
     });
     var cb = row.querySelector('.hr-checkbox input');
@@ -1004,6 +1010,31 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       rowEl.remove();
       $('historyCount').textContent = historyCache.length + ' recording' + (historyCache.length !== 1 ? 's' : '');
     }).catch(function(e) { alert('Delete failed: ' + e.message); });
+  }
+
+  function convertHistoryFile(filePath, format, rowEl, entry) {
+    var keepOriginal = confirm('Convert to ' + format.toUpperCase() + '?\n\nOK = Keep original WebM\nCancel = Replace original WebM');
+    if (keepOriginal === null) return; // dismissed — shouldn't happen with confirm but be safe
+    var mode = keepOriginal ? 'duplicate' : 'replace';
+    showConv('Converting to ' + format.toUpperCase() + '…');
+    window.electronAPI.convertHistoryFile({ filePath: filePath, format: format, mode: mode })
+      .then(function(result) {
+        hideConv();
+        // Add the new file to history
+        var newEntry = Object.assign({}, entry, {
+          filePath: result.outPath,
+          format: format,
+          audioOnly: format === 'mp3' || format === 'm4a' ? true : entry.audioOnly
+        });
+        window.electronAPI.addHistoryEntry(newEntry).then(function(updated) {
+          historyCache = updated;
+          if (result.replaced) {
+            rowEl.remove();
+          }
+          renderHistory();
+        });
+      })
+      .catch(function(e) { hideConv(); alert('Conversion failed: ' + e.message); });
   }
 
   // ─── Bulk select mode ───
