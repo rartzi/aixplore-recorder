@@ -84,6 +84,7 @@ All seven save handlers call `copyToSecondaryDir(out)` after a successful save. 
 | `export-recordings` | Copies an array of recording files to a destination folder (skips existing, never overwrites) |
 | `choose-secondary-dir` | Opens a folder picker, saves the selected path as `secondaryOutputDir` in settings |
 | `clear-secondary-dir` | Sets `secondaryOutputDir` to null in settings |
+| `convert-history-file` | Converts an existing WebM history file to MP4/MP3/M4A using FFmpeg. Accepts `{ filePath, format, mode }` where `mode` is `duplicate` (keep original) or `replace` (delete original after conversion). Auto-copies result to secondary folder. |
 
 ## Security Model
 

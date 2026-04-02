@@ -44,6 +44,7 @@ AIXplore Recorder is a lightweight, native desktop application for recording you
 - **Bulk Delete** — Multi-select recordings in History and delete them all at once
 - **Export to Folder** — Copy selected recordings to any folder without removing originals
 - **Auto-Copy on Save** — Configure a secondary output folder that receives a copy of every recording automatically
+- **Convert WebM in History** — Convert any saved WebM to MP4, MP3, or M4A directly from the History view, with option to keep or replace the original
 
 ## Quick Start
 

@@ -21,6 +21,7 @@ This guide covers everything you need to know to record, edit, and export with A
 - [Bulk Delete](#bulk-delete)
 - [Export to Folder](#export-to-folder)
 - [Auto-Copy on Save](#auto-copy-on-save)
+- [Convert WebM in History](#convert-webm-in-history)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 
@@ -377,6 +378,25 @@ Automatically copy every new recording to a secondary folder as soon as it is sa
 ### Removing the secondary folder
 
 Click **Clear** next to the path to disable auto-copy.
+
+---
+
+## Convert WebM in History
+
+Convert any saved WebM recording to MP4, MP3, or M4A directly from the History view — no need to re-record.
+
+- **Video WebM** rows show a **→ MP4** button
+- **Audio WebM** rows show **→ MP3** and **→ M4A** buttons
+
+### Steps
+
+1. Open the **History** view from the sidebar
+2. Find the WebM recording you want to convert
+3. Click **→ MP4**, **→ MP3**, or **→ M4A**
+4. A dialog asks: **Keep original WebM?**
+   - **OK** — converts and keeps the original WebM (both files in History)
+   - **Cancel** — converts and replaces the original WebM
+5. The converted file is added to History and auto-copied to your secondary folder if configured
 
 ---
 
