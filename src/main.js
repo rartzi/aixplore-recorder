@@ -600,6 +600,42 @@ ipcMain.handle('open-file', (_, p) => {
   return shell.openPath(p);
 });
 
+// ─── Convert existing history file (WebM → MP4 / MP3 / M4A) ───
+ipcMain.handle('convert-history-file', async (_, opts) => {
+  // opts: { filePath, format: 'mp4'|'mp3'|'m4a', mode: 'duplicate'|'replace' }
+  if (!isValidHistoryFilePath(opts.filePath)) throw new Error('Invalid file path');
+  const format = ['mp4', 'mp3', 'm4a'].includes(opts.format) ? opts.format : null;
+  if (!format) throw new Error('Invalid format');
+
+  const dir = path.dirname(opts.filePath);
+  const base = path.basename(opts.filePath, path.extname(opts.filePath));
+  const out = path.join(dir, base + '.' + format);
+
+  const args = ['-y', '-i', opts.filePath];
+  if (format === 'mp4') {
+    args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out);
+  } else if (format === 'mp3') {
+    args.push('-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100', out);
+  } else if (format === 'm4a') {
+    args.push('-vn', '-acodec', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
+  }
+
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); return; }
+      sendToWindow('conversion-status', { status: 'done' });
+      if (opts.mode === 'replace') { try { fs.unlinkSync(opts.filePath); } catch(e) {} }
+      copyToSecondaryDir(out);
+      resolve({ outPath: out, replaced: opts.mode === 'replace' });
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
+});
+
 // ─── History ───
 ipcMain.handle('get-history', () => {
   try { return JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) { return []; }
