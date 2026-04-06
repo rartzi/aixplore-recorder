@@ -167,11 +167,19 @@ function isValidOutputPath(p) {
   return resolved.startsWith(settings.outputDir);
 }
 
-// Validate a history file path: must be a known AIXplore recording filename
+// Validate a history file path: must be within outputDir with a known extension
 function isValidHistoryFilePath(p) {
   if (!p || typeof p !== 'string') return false;
-  const base = path.basename(p);
-  return /^AIXplore-\d{4}-\d{2}-\d{2}_\d{2}h\d{2}m\d{2}s\.(webm|mp4)$/.test(base);
+  const resolved = path.resolve(p);
+  if (!resolved.startsWith(path.resolve(settings.outputDir))) return false;
+  return /\.(webm|mp4|mp3|m4a)$/.test(path.basename(resolved));
+}
+
+// Validate a new filename stem for rename (no slashes, no null bytes, non-empty)
+function isValidRenameStem(stem) {
+  if (!stem || typeof stem !== 'string') return false;
+  const trimmed = stem.trim();
+  return trimmed.length > 0 && !/[/\0]/.test(trimmed);
 }
 
 function sanitizeNumber(val) {
@@ -381,6 +389,7 @@ ipcMain.handle('choose-output-dir', async () => {
     settings.outputDir = r.filePaths[0];
     savePersistedSettings();
     sendToWindow('settings-updated', settings);
+    startDirWatcher();
     return settings.outputDir;
   }
   return null;
@@ -448,33 +457,46 @@ ipcMain.handle('open-file', (_, p) => {
   return shell.openPath(p);
 });
 
-// ─── History ───
-ipcMain.handle('get-history', () => {
+// ─── History helpers ───
+function loadHistory() {
   try { return JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) { return []; }
-});
+}
+function saveHistory(history) {
+  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+}
+
+ipcMain.handle('get-history', () => loadHistory());
 
 ipcMain.handle('add-history-entry', (_, entry) => {
-  let history = [];
-  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
-  // Get file size server-side
+  const history = loadHistory();
   let fileSize = 0;
   try { fileSize = fs.statSync(entry.filePath).size; } catch (e) {}
-  const full = { ...entry, fileSize, savedAt: entry.savedAt || new Date().toISOString() };
-  history.unshift(full);
-  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+  history.unshift({ ...entry, fileSize, savedAt: entry.savedAt || new Date().toISOString() });
+  saveHistory(history);
   return history;
 });
 
 ipcMain.handle('delete-history-entry', (_, filePath) => {
-  let history = [];
-  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
-  history = history.filter(e => e.filePath !== filePath);
-  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
-  // Attempt to delete file if it's a valid AIXplore recording
+  const history = loadHistory().filter(e => e.filePath !== filePath);
+  saveHistory(history);
   if (isValidHistoryFilePath(filePath)) {
     try { fs.unlinkSync(filePath); } catch (e) {}
   }
   return history;
+});
+
+// ─── Rename history file ───
+ipcMain.handle('rename-history-file', (_, { oldPath, newStem }) => {
+  if (!isValidHistoryFilePath(oldPath)) throw new Error('Invalid file path');
+  if (!isValidRenameStem(newStem)) throw new Error('Invalid file name');
+  const newPath = path.join(path.dirname(oldPath), newStem.trim() + path.extname(oldPath));
+  if (newPath === oldPath) return oldPath;
+  if (fs.existsSync(newPath)) throw new Error('A file with that name already exists');
+  fs.renameSync(oldPath, newPath);
+  const history = loadHistory();
+  const idx = history.findIndex(e => e.filePath === oldPath);
+  if (idx !== -1) { history[idx] = { ...history[idx], filePath: newPath }; saveHistory(history); }
+  return newPath;
 });
 
 ipcMain.handle('open-system-pref', (_, url) => {
@@ -523,6 +545,45 @@ ipcMain.handle('history-open-file', (_, p) => {
   return shell.openPath(p);
 });
 
+// ─── Output directory watcher (detects on-disk renames) ───
+let dirWatcher = null;
+let watcherDebounce = null;
+function startDirWatcher() {
+  if (dirWatcher) { try { dirWatcher.close(); } catch (e) {} dirWatcher = null; }
+  const watchDir = settings.outputDir;
+  if (!watchDir || !fs.existsSync(watchDir)) return;
+  try {
+    dirWatcher = fs.watch(watchDir, (eventType, filename) => {
+      if (eventType !== 'rename' || !filename) return;
+      clearTimeout(watcherDebounce);
+      watcherDebounce = setTimeout(() => {
+        const history = loadHistory();
+        const missing = history.filter(e =>
+          path.dirname(e.filePath) === watchDir && !fs.existsSync(e.filePath)
+        );
+        if (missing.length === 0) return;
+        let diskFiles;
+        try { diskFiles = fs.readdirSync(watchDir); } catch (e) { return; }
+        const historyPaths = new Set(history.map(e => e.filePath));
+        const newFiles = diskFiles
+          .map(f => path.join(watchDir, f))
+          .filter(fp => !historyPaths.has(fp) && /\.(webm|mp4|mp3|m4a)$/.test(fp));
+        let changed = false;
+        for (const entry of missing) {
+          const ext = path.extname(entry.filePath);
+          const matchIdx = newFiles.findIndex(fp => path.extname(fp) === ext);
+          if (matchIdx !== -1) {
+            const idx = history.findIndex(e => e.filePath === entry.filePath);
+            if (idx !== -1) { history[idx] = { ...history[idx], filePath: newFiles[matchIdx] }; changed = true; }
+            newFiles.splice(matchIdx, 1);
+          }
+        }
+        if (changed) { saveHistory(history); sendToWindow('history-changed', history); }
+      }, 150);
+    });
+  } catch (e) { console.log('[watcher] failed to watch', watchDir, e.message); }
+}
+
 function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+R', () => sendToWindow('shortcut-toggle-record'));
   globalShortcut.register('CommandOrControl+Shift+P', () => sendToWindow('shortcut-toggle-pause'));
@@ -532,6 +593,7 @@ function registerShortcuts() {
 app.whenReady().then(() => {
   userData = app.getPath('userData');
   loadPersistedSettings();
+  startDirWatcher();
   // Set dock icon (applies in dev mode; packaged builds use the .icns automatically)
   if (process.platform === 'darwin' && app.dock) {
     const iconPath = path.join(__dirname, '..', 'assets', 'icon-1024.png');
