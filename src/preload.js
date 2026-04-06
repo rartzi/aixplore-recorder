@@ -86,7 +86,10 @@ try {
     getPresets: function() { return ipcRenderer.invoke('get-presets'); },
     savePreset: function(p) { return ipcRenderer.invoke('save-preset', p); },
     deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); },
-    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); }
+    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); },
+
+    renameHistoryFile: function(oldPath, newStem) { return ipcRenderer.invoke('rename-history-file', { oldPath: oldPath, newStem: newStem }); },
+    onHistoryChanged: function(cb) { ipcRenderer.on('history-changed', function(_, h) { cb(h); }); }
   });
 
   console.log('[preload] electronAPI exposed OK');
