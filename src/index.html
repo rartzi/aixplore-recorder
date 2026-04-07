@@ -146,6 +146,20 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 .timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 90px; text-align: center; }
 .audio-meter { width: 80px; height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden; }
 .audio-meter-fill { height: 100%; background: var(--green); width: 0%; border-radius: 5px; }
+
+/* ─── Mode toggle (picker) ─── */
+.mode-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; align-self: flex-start; }
+.mode-toggle-btn { padding: 6px 18px; border-radius: 7px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; color: var(--dim); transition: all 0.15s; }
+.mode-toggle-btn.active { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(123,111,240,0.35); }
+
+/* ─── Audio recording view ─── */
+.audio-rec-view { flex: 1; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.waveform-area { flex: 1; background: #000; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; padding: 24px; }
+.waveform-title { font-size: 16px; color: var(--dim); font-weight: 500; }
+.waveform-bars { display: flex; align-items: center; justify-content: center; gap: 4px; height: 80px; width: 100%; max-width: 500px; }
+.waveform-bar { flex: 1; max-width: 14px; border-radius: 3px; background: var(--accent); min-height: 3px; }
+.waveform-meta { font-size: 13px; color: var(--dim); }
+
 .pip-sizes { display: flex; gap: 6px; }
 .pip-size-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface2); color: var(--dim); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .pip-size-btn.active { border-color: var(--accent); color: var(--accent); }
@@ -203,10 +217,26 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 .history-row .hr-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; background: var(--surface2); color: var(--dim); flex-shrink: 0; }
 .history-row .hr-badge.webm { color: #74b9ff; }
 .history-row .hr-badge.mp4 { color: var(--green); }
+.history-row .hr-badge.mp3 { color: var(--yellow); }
+.history-row .hr-badge.m4a { color: var(--accent); }
 .history-row .hr-info { flex: 1; min-width: 0; }
 .history-row .hr-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .history-row .hr-meta { font-size: 11px; color: var(--dim); margin-top: 2px; }
 .history-row .hr-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-select-mode { font-size: 12px; padding: 4px 12px; background: transparent; color: var(--dim); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.btn-select-mode:hover { color: var(--accent); border-color: var(--accent); }
+.btn-select-mode.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#bulkActionBar { position: sticky; bottom: 0; background: var(--surface2); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; display: none; }
+#bulkActionBar .bulk-count { font-size: 13px; color: var(--text); font-weight: 500; }
+#bulkActionBar .bulk-select-all { font-size: 12px; color: var(--accent); cursor: pointer; background: none; border: none; text-decoration: underline; }
+#bulkActionBar .bulk-select-all:hover { color: var(--accent-h); }
+.history-row.selectable { cursor: pointer; }
+.history-row .hr-checkbox { display: none; align-items: center; margin-right: 8px; }
+.history-row.selectable .hr-checkbox { display: flex; align-items: center; }
+.history-row.selectable .hr-actions { display: none; }
+.hr-checkbox input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.history-row .hr-rename-input { font-size: 13px; font-weight: 500; background: var(--surface2); border: 1px solid var(--accent); border-radius: 4px; color: var(--text); padding: 2px 6px; width: 100%; outline: none; }
+.history-row .hr-rename-input.invalid { border-color: var(--red); }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 200px; color: var(--dim); font-size: 14px; }
 .empty-state svg { width: 40px; height: 40px; opacity: 0.3; }
 
@@ -339,16 +369,21 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 
   <!-- View: Source Picker -->
   <div id="viewPicker" class="source-picker hidden">
-    <h2>Choose a source to record</h2>
-    <p class="sub">Select a screen or window, configure settings, then hit Start.</p>
+    <!-- Mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-toggle-btn active" id="modeVideo" onclick="setPickerMode('video')">🎥 Video + Audio</button>
+      <button class="mode-toggle-btn" id="modeAudio" onclick="setPickerMode('audio')">🎙 Audio Only</button>
+    </div>
+    <h2 id="pickerTitle">Choose a source to record</h2>
+    <p class="sub" id="pickerSub">Select a screen or window, configure settings, then hit Start.</p>
     <div id="errorBox" class="error-msg hidden"></div>
     <div id="sourceGrid" class="source-grid"></div>
-    <div class="settings-row">
-      <div class="setting-group"><label>Webcam</label><button id="toggleCam" class="toggle active"></button></div>
+    <div class="settings-row" id="pickerToggles">
+      <div class="setting-group" id="camToggleGroup"><label>Webcam</label><button id="toggleCam" class="toggle active"></button></div>
       <div class="setting-group"><label>Mic</label><button id="toggleMic" class="toggle active"></button></div>
-      <div class="setting-group"><label>System Audio</label><button id="toggleSys" class="toggle active"></button></div>
+      <div class="setting-group" id="sysToggleGroup"><label>System Audio</label><button id="toggleSys" class="toggle active"></button></div>
       <div class="setting-group"><label>Countdown</label><select id="countdownSel" class="styled"><option value="0">None</option><option value="3" selected>3s</option><option value="5">5s</option></select></div>
-      <div class="setting-group"><label>Cursor FX</label><button id="toggleClickFx" class="toggle active"></button></div>
+      <div class="setting-group" id="cursorFxGroup"><label>Cursor FX</label><button id="toggleClickFx" class="toggle active"></button></div>
     </div>
     <div class="settings-row" style="padding:4px 0;">
       <div class="setting-group" style="flex:1;">
@@ -408,6 +443,41 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     </div>
   </div>
 
+  <!-- View: Audio Recording -->
+  <div id="viewAudioRecording" class="audio-rec-view hidden">
+    <div class="waveform-area">
+      <div class="waveform-title">Recording audio…</div>
+      <div class="waveform-bars" id="waveformBars"></div>
+      <div class="waveform-meta" id="waveformMeta">Microphone</div>
+    </div>
+    <div class="control-bar" style="flex-shrink:0;">
+      <div id="audioRecDot" class="rec-dot"></div>
+      <span id="audioTimer" class="timer">00:00</span>
+      <div class="audio-meter"><div id="audioMeterFill" class="audio-meter-fill"></div></div>
+      <button id="btnAudioPause" class="btn btn-yellow" style="padding:10px 24px;">PAUSE</button>
+      <button id="btnAudioStop" class="btn btn-danger" style="padding:10px 24px;">STOP</button>
+    </div>
+  </div>
+
+  <!-- View: Audio Trim -->
+  <div id="viewAudioTrim" class="trim-view hidden">
+    <div class="trim-preview" style="background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;">
+      <audio id="trimAudio" controls style="width:90%;"></audio>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="trim-sliders"><label>Start</label><input type="range" id="audioTrimStart" min="0" max="100" step="0.1" value="0" /><span id="audioTrimStartVal" class="time-val">0:00</span></div>
+      <div class="trim-sliders"><label>End</label><input type="range" id="audioTrimEnd" min="0" max="100" step="0.1" value="100" /><span id="audioTrimEndVal" class="time-val">0:00</span></div>
+      <div class="trim-buttons">
+        <button class="btn btn-ghost" id="btnAudioDiscard">Discard</button>
+        <button class="btn btn-ghost" id="btnAudioReRecord">Re-record</button>
+        <button class="btn btn-green" id="btnSaveAudioFull">Save WebM (instant)</button>
+        <button class="btn btn-primary" id="btnSaveAudioTrim">Save Trimmed WebM</button>
+        <button class="btn btn-yellow" id="btnSaveMp3">Save as MP3</button>
+        <button class="btn btn-ghost" id="btnSaveM4a">Save as M4A</button>
+      </div>
+    </div>
+  </div>
+
   <!-- View: Dashboard -->
   <div id="viewDashboard" class="page">
     <div class="page-header">
@@ -462,9 +532,17 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     </div>
     <div class="history-toolbar">
       <input type="text" class="search-input" id="historySearch" placeholder="Search recordings…" />
+      <button class="btn-select-mode" id="btnSelectMode">Select</button>
     </div>
     <div class="scrollable">
       <div class="history-list" id="historyList"></div>
+    </div>
+    <div id="bulkActionBar">
+      <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button class="bulk-select-all" id="bulkSelectAll">Select All</button>
+      <div style="flex:1;"></div>
+      <button class="btn-tiny" id="bulkExportBtn">Export</button>
+      <button class="btn-tiny" id="bulkDeleteBtn" style="color:var(--red);border-color:var(--red);">Delete</button>
     </div>
   </div>
 
@@ -496,6 +574,14 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
             <div style="display:flex;gap:8px;align-items:center;">
               <span id="settingsOutputPath" class="path-display" style="max-width:200px;">—</span>
               <button class="btn-tiny" id="settingsBtnChangeDir">Change</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="sr-label">Secondary Output Folder</div><div class="sr-sub">Auto-copy every recording to a second folder</div></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="settingsSecondaryPath" class="path-display" style="max-width:200px;">Not set</span>
+              <button class="btn-tiny" id="settingsBtnSecondaryDir">Choose…</button>
+              <button class="btn-tiny" id="settingsBtnClearSecondary" style="color:var(--red);">Clear</button>
             </div>
           </div>
         </div>
@@ -700,8 +786,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
-  var ALL_VIEWS = ['viewPicker','viewRecording','viewTrim','viewDashboard','viewHistory','viewPermissions','viewSettings','viewAbout'];
-  var RECORDING_VIEWS = ['viewRecording','viewTrim'];
+  var ALL_VIEWS = ['viewPicker','viewRecording','viewAudioRecording','viewTrim','viewAudioTrim','viewDashboard','viewHistory','viewPermissions','viewSettings','viewAbout'];
+  var RECORDING_VIEWS = ['viewRecording','viewAudioRecording','viewTrim','viewAudioTrim'];
   var currentView = 'viewDashboard';
 
   function showView(id) {
@@ -734,7 +820,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     if (viewId === 'viewHistory') loadHistory();
     if (viewId === 'viewPermissions') checkPermissions();
     if (viewId === 'viewSettings') { loadSettingsView(); loadPresets(); }
-    if (viewId === 'viewPicker') { sourceRetryCount = 0; loadSources(); loadPresets(applyDefaultPreset); }
+    if (viewId === 'viewPicker') { sourceRetryCount = 0; applyPickerMode(); loadPresets(applyDefaultPreset); if (pickerMode === 'video') loadSources(); }
   }
 
   function showError(msg) { $('errorBox').textContent = msg; $('errorBox').classList.remove('hidden'); }
@@ -754,6 +840,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   var lastClickTime = 0;     // timestamp of last click for pulse effect
   var pipPosPercent = { x: 0.85, y: 0.85 }, pipSize = 160;
   var appSettings = {};
+  var audioOnlyMode = false;
+  var audioOnlyStream = null;
+  var audioDisplayStream = null; // system audio capture stream (Path A)
+  var pickerMode = 'video'; // 'video' | 'audio'
 
   // ─── Check API ───
   if (!window.electronAPI) {
@@ -810,8 +900,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       list.innerHTML = '';
       recent.forEach(function(e) { list.appendChild(makeRecentCard(e)); });
     }).catch(function() {
-      $('dashTotal').textContent = '0';
-      $('dashRecentList').innerHTML = '<div class="empty-state"><span>No recordings yet</span></div>';
+      if ($('dashTotal')) $('dashTotal').textContent = '0';
+      if ($('dashRecentList')) $('dashRecentList').innerHTML = '<div class="empty-state"><span>No recordings yet</span></div>';
     });
   }
 
@@ -840,6 +930,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 
   // ─── History ───
   var historyFilter = '';
+  var selectMode = false;
 
   function loadHistory() {
     window.electronAPI.getHistory().then(function(history) {
@@ -866,28 +957,116 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     filtered.forEach(function(e) { list.appendChild(makeHistoryRow(e)); });
   }
 
+  var DEFAULT_ROW_ACTIONS =
+    '<button class="btn-tiny" data-action="rename" title="Rename">✏️</button>' +
+    '<button class="btn-tiny" data-action="play">Play</button>' +
+    '<button class="btn-tiny" data-action="finder">Finder</button>' +
+    '<button class="btn-tiny" data-action="delete" style="color:var(--red);">Delete</button>';
+
   function makeHistoryRow(e) {
     var name = e.filePath ? e.filePath.split('/').pop() : 'Unknown';
     var ext = name.split('.').pop().toLowerCase();
+    var isAudio = e.audioOnly || ext === 'mp3' || ext === 'm4a' || (ext === 'webm' && name.indexOf('AIXplore-Audio-') === 0);
+    var badgeLabel = isAudio && ext === 'webm' ? 'webm-a' : ext;
+    var iconSvg = isAudio
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+    var stem = name.slice(0, name.length - ext.length - 1);
+    function makeActionsHtml() {
+      return '<button class="btn-tiny" data-action="rename" title="Rename">✏️</button>' +
+        '<button class="btn-tiny" data-action="play">Play</button>' +
+        '<button class="btn-tiny" data-action="finder">Finder</button>' +
+        (ext === 'webm' && !isAudio ? '<button class="btn-tiny" data-action="to-mp4" style="color:var(--accent);">→ MP4</button>' : '') +
+        (ext === 'webm' && isAudio  ? '<button class="btn-tiny" data-action="to-mp3" style="color:var(--accent);">→ MP3</button>' +
+                                      '<button class="btn-tiny" data-action="to-m4a" style="color:var(--accent);">→ M4A</button>' : '') +
+        '<button class="btn-tiny" data-action="delete" style="color:var(--red);">Delete</button>';
+    }
     var row = document.createElement('div');
-    row.className = 'history-row';
-    row.innerHTML = '<span class="hr-badge ' + ext + '">' + esc(ext) + '</span>' +
+    row.className = 'history-row' + (selectMode ? ' selectable' : '');
+    row.dataset.filePath = e.filePath || '';
+    row.innerHTML = '<label class="hr-checkbox"><input type="checkbox" /></label>' +
+      '<span class="hr-badge ' + (isAudio && ext === 'webm' ? 'webm' : ext) + '">' + esc(badgeLabel) + '</span>' +
+      '<div class="rc-icon" style="width:36px;height:36px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:' + (isAudio ? 'var(--yellow)' : 'var(--accent)') + ';">' + iconSvg + '</div>' +
       '<div class="hr-info">' +
         '<div class="hr-name">' + esc(name) + '</div>' +
         '<div class="hr-meta">' + (e.savedAt ? fmtDate(e.savedAt) : '') + (e.duration ? ' · ' + fmtDuration(e.duration) : '') + (e.fileSize ? ' · ' + fmtSize(e.fileSize) : '') + '</div>' +
       '</div>' +
-      '<div class="hr-actions">' +
-        '<button class="btn-tiny" data-action="play">Play</button>' +
-        '<button class="btn-tiny" data-action="finder">Finder</button>' +
-        '<button class="btn-tiny" data-action="delete" style="color:var(--red);">Delete</button>' +
-      '</div>';
-    var path = e.filePath;
-    row.querySelectorAll('[data-action]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(path).catch(function(){});
-        else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(path).catch(function(){});
-        else if (btn.dataset.action === 'delete') deleteHistoryEntry(path, row);
+      '<div class="hr-actions">' + makeActionsHtml() + '</div>';
+    var filePath = e.filePath;
+    var nameDiv = row.querySelector('.hr-name');
+    var actionsDiv = row.querySelector('.hr-actions');
+
+    function enterRenameMode() {
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'hr-rename-input';
+      input.value = stem;
+      nameDiv.innerHTML = '';
+      nameDiv.appendChild(input);
+      actionsDiv.innerHTML =
+        '<button class="btn-tiny" data-action="confirm" style="color:var(--green);">✓</button>' +
+        '<button class="btn-tiny" data-action="cancel">✗</button>';
+      input.focus(); input.select();
+
+      function handleRenameAction(ev) {
+        var btn = ev.target.closest('[data-action]');
+        if (!btn) return;
+        if (btn.dataset.action === 'confirm') doConfirm();
+        else if (btn.dataset.action === 'cancel') doCancel();
+      }
+      actionsDiv.addEventListener('click', handleRenameAction);
+
+      function exitRenameMode() {
+        actionsDiv.removeEventListener('click', handleRenameAction);
+        restoreActions();
+      }
+      function restoreActions() { actionsDiv.innerHTML = makeActionsHtml(); bindActions(); }
+
+      function doConfirm() {
+        var newStem = input.value.trim();
+        if (!newStem) { input.classList.add('invalid'); input.focus(); return; }
+        window.electronAPI.renameHistoryFile(filePath, newStem).then(function(newPath) {
+          filePath = newPath;
+          var newName = newPath.split('/').pop();
+          stem = newName.slice(0, newName.length - ext.length - 1);
+          nameDiv.textContent = newName;
+          exitRenameMode();
+        }).catch(function(err) {
+          input.classList.remove('invalid');
+          input.classList.add('invalid');
+          input.title = err.message;
+          input.focus();
+        });
+      }
+      function doCancel() { nameDiv.textContent = name; exitRenameMode(); }
+
+      input.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); doConfirm(); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); doCancel(); }
       });
+    }
+
+    function bindActions() {
+      actionsDiv.querySelectorAll('[data-action]').forEach(function(btn) {
+        btn.addEventListener('click', function(ev) {
+          if (btn.dataset.action === 'rename') { ev.stopPropagation(); enterRenameMode(); }
+          else if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(){});
+          else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(){});
+          else if (btn.dataset.action === 'delete') deleteHistoryEntry(filePath, row);
+          else if (btn.dataset.action === 'to-mp4') convertHistoryFile(filePath, 'mp4', row, e);
+          else if (btn.dataset.action === 'to-mp3') convertHistoryFile(filePath, 'mp3', row, e);
+          else if (btn.dataset.action === 'to-m4a') convertHistoryFile(filePath, 'm4a', row, e);
+        });
+      });
+    }
+    bindActions();
+    var cb = row.querySelector('.hr-checkbox input');
+    cb.addEventListener('change', updateBulkCount);
+    row.addEventListener('click', function(ev) {
+      if (!selectMode) return;
+      if (ev.target.tagName === 'INPUT') return;
+      cb.checked = !cb.checked;
+      updateBulkCount();
     });
     return row;
   }
@@ -900,6 +1079,107 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       $('historyCount').textContent = historyCache.length + ' recording' + (historyCache.length !== 1 ? 's' : '');
     }).catch(function(e) { alert('Delete failed: ' + e.message); });
   }
+
+  function convertHistoryFile(filePath, format, rowEl, entry) {
+    var keepOriginal = confirm('Convert to ' + format.toUpperCase() + '?\n\nOK = Keep original WebM\nCancel = Replace original WebM');
+    if (keepOriginal === null) return; // dismissed — shouldn't happen with confirm but be safe
+    var mode = keepOriginal ? 'duplicate' : 'replace';
+    showConv('Converting to ' + format.toUpperCase() + '…');
+    window.electronAPI.convertHistoryFile({ filePath: filePath, format: format, mode: mode })
+      .then(function(result) {
+        hideConv();
+        // Add the new file to history
+        var newEntry = Object.assign({}, entry, {
+          filePath: result.outPath,
+          format: format,
+          audioOnly: format === 'mp3' || format === 'm4a' ? true : entry.audioOnly
+        });
+        window.electronAPI.addHistoryEntry(newEntry).then(function(updated) {
+          historyCache = updated;
+          if (result.replaced) {
+            rowEl.remove();
+          }
+          renderHistory();
+        });
+      })
+      .catch(function(e) { hideConv(); alert('Conversion failed: ' + e.message); });
+  }
+
+  // ─── Bulk select mode ───
+
+  function enterSelectMode() {
+    selectMode = true;
+    $('btnSelectMode').textContent = 'Cancel';
+    $('btnSelectMode').classList.add('active');
+    document.querySelectorAll('.history-row').forEach(function(r) { r.classList.add('selectable'); });
+    updateBulkCount();
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    $('btnSelectMode').textContent = 'Select';
+    $('btnSelectMode').classList.remove('active');
+    document.querySelectorAll('.history-row').forEach(function(r) {
+      r.classList.remove('selectable');
+      var cb = r.querySelector('.hr-checkbox input');
+      if (cb) cb.checked = false;
+    });
+    $('bulkActionBar').style.display = 'none';
+  }
+
+  function updateBulkCount() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var count = checked.length;
+    $('bulkCount').textContent = count + ' selected';
+    $('bulkActionBar').style.display = (selectMode && count > 0) ? 'flex' : 'none';
+    $('bulkDeleteBtn').textContent = 'Delete' + (count > 0 ? ' (' + count + ')' : '');
+    $('bulkExportBtn').textContent = 'Export' + (count > 0 ? ' (' + count + ')' : '');
+  }
+
+  $('btnSelectMode').addEventListener('click', function() {
+    if (selectMode) exitSelectMode(); else enterSelectMode();
+  });
+
+  $('bulkSelectAll').addEventListener('click', function() {
+    document.querySelectorAll('.history-row .hr-checkbox input').forEach(function(cb) { cb.checked = true; });
+    updateBulkCount();
+  });
+
+  $('bulkDeleteBtn').addEventListener('click', function() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var paths = [];
+    checked.forEach(function(cb) {
+      var row = cb.closest('.history-row');
+      if (row && row.dataset.filePath) paths.push(row.dataset.filePath);
+    });
+    if (paths.length === 0) return;
+    if (!confirm('Delete ' + paths.length + ' recording' + (paths.length !== 1 ? 's' : '') + '? Files will be removed from disk.')) return;
+    window.electronAPI.deleteHistoryEntries(paths).then(function(updated) {
+      historyCache = updated;
+      exitSelectMode();
+      renderHistory();
+    }).catch(function(e) { alert('Delete failed: ' + e.message); });
+  });
+
+  $('bulkExportBtn').addEventListener('click', function() {
+    var checked = document.querySelectorAll('.history-row .hr-checkbox input:checked');
+    var paths = [];
+    checked.forEach(function(cb) {
+      var row = cb.closest('.history-row');
+      if (row && row.dataset.filePath) paths.push(row.dataset.filePath);
+    });
+    if (paths.length === 0) return;
+    window.electronAPI.chooseExportDir().then(function(destDir) {
+      if (!destDir) return;
+      window.electronAPI.exportRecordings({ filePaths: paths, destDir: destDir }).then(function(result) {
+        var total = paths.length;
+        var msg = 'Exported ' + result.exported + ' of ' + total + ' recording' + (total !== 1 ? 's' : '') + ' to ' + destDir;
+        if (result.errors > 0) msg += '\n' + result.errors + ' file' + (result.errors !== 1 ? 's' : '') + ' not found';
+        if (result.skipped > 0) msg += '\n' + result.skipped + ' already existed (skipped)';
+        alert(msg);
+      }).catch(function(e) { alert('Export failed: ' + e.message); });
+    }).catch(function() {});
+  });
 
   $('historySearch').addEventListener('input', function() {
     historyFilter = this.value;
@@ -918,6 +1198,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       if ($('settingsClickFx')) $('settingsClickFx').classList.toggle('active', s.clickHighlight !== false);
       if ($('settingsCursorSize') && s.cursorFxSize) $('settingsCursorSize').value = s.cursorFxSize;
       if ($('settingsCursorColor') && s.cursorFxColor) $('settingsCursorColor').value = s.cursorFxColor;
+      $('settingsSecondaryPath').textContent = s.secondaryOutputDir || 'Not set';
       populateAudioDevices(s.audioDeviceId);
     });
   }
@@ -958,6 +1239,18 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   $('settingsBtnChangeDir').addEventListener('click', function() {
     window.electronAPI.chooseOutputDir().then(function(d) {
       if (d) { $('settingsOutputPath').textContent = d; $('outputPath').textContent = d; }
+    });
+  });
+
+  $('settingsBtnSecondaryDir').addEventListener('click', function() {
+    window.electronAPI.chooseSecondaryDir().then(function(d) {
+      if (d) $('settingsSecondaryPath').textContent = d;
+    });
+  });
+
+  $('settingsBtnClearSecondary').addEventListener('click', function() {
+    window.electronAPI.clearSecondaryDir().then(function() {
+      $('settingsSecondaryPath').textContent = 'Not set';
     });
   });
 
@@ -1007,25 +1300,37 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   }
 
   function renderFormatBreakdown(history) {
-    var webm = history.filter(function(e){return (e.format||'').indexOf('webm')>=0 || (e.filePath||'').endsWith('.webm');}).length;
-    var mp4 = history.filter(function(e){return (e.format||'').indexOf('mp4')>=0 || (e.filePath||'').endsWith('.mp4');}).length;
+    var webm  = history.filter(function(e){ var fp=e.filePath||''; return !e.audioOnly && !fp.includes('AIXplore-Audio-') && ((e.format||'').indexOf('webm')>=0 || fp.endsWith('.webm')); }).length;
+    var mp4   = history.filter(function(e){ return (e.format||'').indexOf('mp4')>=0 || (e.filePath||'').endsWith('.mp4'); }).length;
+    var mp3   = history.filter(function(e){ return (e.filePath||'').endsWith('.mp3'); }).length;
+    var m4a   = history.filter(function(e){ return (e.filePath||'').endsWith('.m4a'); }).length;
+    var waudio= history.filter(function(e){ var fp=e.filePath||''; return (e.audioOnly || fp.includes('AIXplore-Audio-')) && fp.endsWith('.webm'); }).length;
     var total = history.length || 1;
     var el = $('statsFormatBreakdown');
-    var pWebm = Math.round(webm/total*100), pMp4 = Math.round(mp4/total*100);
-    // Simple SVG donut
     var r = 38, cx = 50, cy = 50, circ = 2*Math.PI*r;
-    var webmArc = circ * (webm/total);
-    var mp4Arc = circ * (mp4/total);
+    var arcs = [
+      { n: webm,   color: '#74b9ff',        label: 'WebM (video)' },
+      { n: mp4,    color: 'var(--green)',    label: 'MP4' },
+      { n: mp3,    color: 'var(--yellow)',   label: 'MP3' },
+      { n: m4a,    color: 'var(--accent)',   label: 'M4A' },
+      { n: waudio, color: '#a29bfe',         label: 'WebM (audio)' }
+    ];
+    var offset = 0;
+    var svgArcs = arcs.map(function(a) {
+      var arc = circ * (a.n / total);
+      var s = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+a.color+'" stroke-width="14" stroke-dasharray="'+arc+' '+circ+'" stroke-dashoffset="'+(-offset)+'" transform="rotate(-90 50 50)"/>';
+      offset += arc;
+      return s;
+    }).join('');
+    var legend = arcs.filter(function(a){return a.n>0;}).map(function(a){
+      return '<div class="legend-item"><div class="legend-dot" style="background:'+a.color+'"></div>'+a.label+': '+a.n+' ('+Math.round(a.n/total*100)+'%)</div>';
+    }).join('');
     el.innerHTML = '<svg width="100" height="100" viewBox="0 0 100 100">' +
       '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--border)" stroke-width="14"/>' +
-      '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#74b9ff" stroke-width="14" stroke-dasharray="'+webmArc+' '+circ+'" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>' +
-      '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="var(--green)" stroke-width="14" stroke-dasharray="'+mp4Arc+' '+circ+'" stroke-dashoffset="'+(-webmArc)+'" transform="rotate(-90 50 50)"/>' +
-      '<text x="50" y="54" text-anchor="middle" font-size="16" font-weight="700" fill="var(--text)">'+total+'</text>' +
+      svgArcs +
+      '<text x="50" y="54" text-anchor="middle" font-size="16" font-weight="700" fill="var(--text)">'+history.length+'</text>' +
     '</svg>' +
-    '<div class="donut-legend">' +
-      '<div class="legend-item"><div class="legend-dot" style="background:#74b9ff"></div>WebM: '+webm+' ('+pWebm+'%)</div>' +
-      '<div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>MP4: '+mp4+' ('+pMp4+'%)</div>' +
-    '</div>';
+    '<div class="donut-legend">' + legend + '</div>';
   }
 
   function renderDurationChart(history) {
@@ -1112,10 +1417,9 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       var summaryRow = document.createElement('div');
       summaryRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
       var isDefault = p.id === defaultId;
-      var desc = [p.quality + ' · ' + p.fps + 'fps',
-        p.countdown ? p.countdown + 's countdown' : 'no countdown',
-        p.cam ? 'cam' : 'no cam', p.mic ? 'mic' : 'no mic',
-        p.sysAudio ? 'sys audio' : ''].filter(Boolean).join(' · ');
+      var desc = p.audioOnly
+        ? ['Audio only', p.countdown ? p.countdown + 's countdown' : 'no countdown', p.mic ? 'mic' : 'no mic'].filter(Boolean).join(' · ')
+        : [p.quality + ' · ' + p.fps + 'fps', p.countdown ? p.countdown + 's countdown' : 'no countdown', p.cam ? 'cam' : 'no cam', p.mic ? 'mic' : 'no mic', p.sysAudio ? 'sys audio' : ''].filter(Boolean).join(' · ');
       summaryRow.innerHTML =
         '<div style="flex:1;min-width:0;">' +
           '<span style="font-size:13px;font-weight:600;">' + esc(p.name) + '</span>' +
@@ -1149,6 +1453,7 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
           '</select>' +
         '</div>' +
         '<div style="display:flex;gap:10px;align-items:center;">' +
+          '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-audioonly"' + (p.audioOnly?' checked':'') + '> 🎙 Audio Only</label>' +
           '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-cam"' + (p.cam?' checked':'') + '> Webcam</label>' +
           '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-mic"' + (p.mic?' checked':'') + '> Microphone</label>' +
           '<label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="preset-sys"' + (p.sysAudio?' checked':'') + '> System Audio</label>' +
@@ -1177,7 +1482,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
           countdown: parseInt(editForm.querySelector('.preset-countdown').value),
           cam:       editForm.querySelector('.preset-cam').checked,
           mic:       editForm.querySelector('.preset-mic').checked,
-          sysAudio:  editForm.querySelector('.preset-sys').checked
+          sysAudio:  editForm.querySelector('.preset-sys').checked,
+          audioOnly: editForm.querySelector('.preset-audioonly').checked
         };
         if (!updated.name) return;
         window.electronAPI.updatePreset(updated).then(function(all) {
@@ -1194,9 +1500,14 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
 
   function applyPreset(p) {
     if (!p) return;
-    if ($('toggleCam'))  $('toggleCam').classList.toggle('active', p.cam !== false);
+    if (p.audioOnly) {
+      setPickerMode('audio');
+    } else {
+      setPickerMode('video');
+      if ($('toggleCam'))  $('toggleCam').classList.toggle('active', p.cam !== false);
+      if ($('toggleSys'))  $('toggleSys').classList.toggle('active', p.sysAudio === true);
+    }
     if ($('toggleMic'))  $('toggleMic').classList.toggle('active', p.mic !== false);
-    if ($('toggleSys'))  $('toggleSys').classList.toggle('active', p.sysAudio === true);
     if ($('countdownSel')) $('countdownSel').value = String(p.countdown || 0);
     window.electronAPI.setSettings({ quality: p.quality, fps: p.fps, countdown: p.countdown || 0 })
       .then(function(s) { appSettings = s; }).catch(function() {});
@@ -1210,9 +1521,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       quality: appSettings.quality || 'medium',
       fps: appSettings.fps || 30,
       countdown: parseInt(($('countdownSel') || {}).value || '0') || 0,
-      cam:      $('toggleCam')  ? $('toggleCam').classList.contains('active')  : true,
-      mic:      $('toggleMic')  ? $('toggleMic').classList.contains('active')  : true,
-      sysAudio: $('toggleSys')  ? $('toggleSys').classList.contains('active')  : false
+      cam:       $('toggleCam')  ? $('toggleCam').classList.contains('active')  : true,
+      mic:       $('toggleMic')  ? $('toggleMic').classList.contains('active')  : true,
+      sysAudio:  $('toggleSys')  ? $('toggleSys').classList.contains('active')  : false,
+      audioOnly: pickerMode === 'audio'
     };
     window.electronAPI.savePreset(preset).then(function(updated) {
       presetsCache = updated; renderPresetSelector(); renderPresetsSettings();
@@ -1300,7 +1612,10 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   // ─── Source picker buttons ───
   $('btnRefresh').addEventListener('click', function() { sourceRetryCount = 0; loadSources(); });
   $('btnChangeDir').addEventListener('click', function() { window.electronAPI.chooseOutputDir().then(function(d){if(d)$('outputPath').textContent=d;}); });
-  $('btnStart').addEventListener('click', function() { startRecording(); });
+  $('btnStart').addEventListener('click', function() {
+    if (pickerMode === 'audio') startAudioRecording();
+    else startRecording();
+  });
   $('btnPause').addEventListener('click', function() { togglePause(); });
   $('btnStop').addEventListener('click', function() { stopRecording(); });
   $('btnDiscard').addEventListener('click', function() { discardRecording(); });
@@ -1313,6 +1628,16 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   $('btnDismiss').addEventListener('click', function() { $('saveBanner').classList.add('hidden'); });
   $('trimStart').addEventListener('input', function() { $('trimStartVal').textContent = fmtTime(parseFloat(this.value)); });
   $('trimEnd').addEventListener('input', function() { $('trimEndVal').textContent = fmtTime(parseFloat(this.value)); });
+  $('audioTrimStart').addEventListener('input', function() { $('audioTrimStartVal').textContent = fmtTime(parseFloat(this.value)); });
+  $('audioTrimEnd').addEventListener('input', function() { $('audioTrimEndVal').textContent = fmtTime(parseFloat(this.value)); });
+  $('btnAudioPause').addEventListener('click', function() { toggleAudioPause(); });
+  $('btnAudioStop').addEventListener('click',  function() { stopAudioRecording(); });
+  $('btnSaveAudioFull').addEventListener('click', function() { saveAudioInstant(); });
+  $('btnSaveAudioTrim').addEventListener('click', function() { saveAudioTrimmed(); });
+  $('btnSaveMp3').addEventListener('click',       function() { saveAsMp3(); });
+  $('btnSaveM4a').addEventListener('click',       function() { saveAsM4a(); });
+  $('btnAudioDiscard').addEventListener('click',  function() { discardAudioRecording(); });
+  $('btnAudioReRecord').addEventListener('click', function() { reAudioRecord(); });
 
   document.querySelectorAll('.pip-size-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -1652,6 +1977,264 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
   function reRecord(){discardRecording();if(selectedSource)setTimeout(function(){startRecording();},300);}
   function showBanner(p){lastSavedPath=p;$('savedPath').textContent=p;$('saveBanner').classList.remove('hidden');}
 
+  // ═══════ PICKER MODE ═══════
+  window.setPickerMode = setPickerMode;
+  function setPickerMode(mode) {
+    pickerMode = mode;
+    applyPickerMode();
+  }
+  function applyPickerMode() {
+    var isAudio = pickerMode === 'audio';
+    $('modeVideo').classList.toggle('active', !isAudio);
+    $('modeAudio').classList.toggle('active', isAudio);
+    $('pickerTitle').textContent = isAudio ? 'Record Audio' : 'Choose a source to record';
+    $('pickerSub').textContent   = isAudio ? 'Capture mic only, or enable System Audio to silently capture call audio (Zoom, Teams, WhatsApp) — no screen picker shown.' : 'Select a screen or window, configure settings, then hit Start.';
+    $('sourceGrid').classList.toggle('hidden', isAudio);
+    $('camToggleGroup') && $('camToggleGroup').classList.toggle('hidden', isAudio);
+    // System Audio toggle is shown in audio mode too — enables call recording (Path A)
+    $('cursorFxGroup')  && $('cursorFxGroup').classList.toggle('hidden', isAudio);
+    if (isAudio) {
+      $('btnStart').disabled = false;
+      $('btnStart').textContent = 'Start Audio Recording';
+      $('btnRefresh') && $('btnRefresh').classList.add('hidden');
+    } else {
+      $('btnStart').textContent = 'Start Recording';
+      $('btnRefresh') && $('btnRefresh').classList.remove('hidden');
+      if (!selectedSource) $('btnStart').disabled = true;
+    }
+  }
+
+  // ═══════ AUDIO RECORDING ═══════
+  function startAudioRecording() {
+    var wantMic = $('toggleMic') ? $('toggleMic').classList.contains('active') : true;
+    var wantSys = $('toggleSys') ? $('toggleSys').classList.contains('active') : false;
+    var deviceId = getAudioDeviceId();
+    var audioConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+    // Use 'ideal' not 'exact' so AirPods/Bluetooth mics are used when connected
+    // even if a different device was saved in settings
+    if (deviceId) audioConstraints.deviceId = { ideal: deviceId };
+    var countdownSec = parseInt($('countdownSel').value) || 0;
+
+    var doStart = function() {
+      console.log('[audio-rec] doStart — wantMic:', wantMic, 'wantSys:', wantSys, 'deviceId:', deviceId);
+
+      // Step 1: optionally capture system audio via getDisplayMedia (Path A)
+      // We first get Screen 1's source ID and set it so the displayMedia handler
+      // uses the primary screen for loopback — not a stale window selection
+      var sysPromise = wantSys
+        ? window.electronAPI.getPrimaryScreenId()
+            .then(function(screenId) {
+              console.log('[audio-rec] primary screen id:', screenId);
+              if (screenId) window.electronAPI.setSelectedSource(screenId);
+              return navigator.mediaDevices.getDisplayMedia({ audio: true, video: { width: 1, height: 1 } });
+            })
+            .catch(function(e) {
+              console.warn('[audio-rec] getDisplayMedia failed:', e.message);
+              return null;
+            })
+        : Promise.resolve(null);
+
+      sysPromise
+        .then(function(displayStream) {
+          audioDisplayStream = displayStream;
+          console.log('[audio-rec] displayStream:', displayStream ? 'ok' : 'null',
+            '| audio tracks:', displayStream ? displayStream.getAudioTracks().length : 0,
+            '| video tracks:', displayStream ? displayStream.getVideoTracks().length : 0);
+          // Immediately stop video tracks — system audio only, nothing is displayed or recorded
+          if (audioDisplayStream) {
+            audioDisplayStream.getVideoTracks().forEach(function(t){ t.stop(); });
+          }
+          // Step 2: capture mic
+          return navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+        })
+        .then(function(stream) {
+          audioOnlyStream = stream;
+          console.log('[audio-rec] micStream:', stream ? 'ok' : 'null',
+            '| tracks:', stream ? stream.getAudioTracks().map(function(t){ return t.label + '('+t.readyState+')'; }) : []);
+          audioOnlyMode = true;
+          audioCtx = new AudioContext();
+          return audioCtx.state !== 'running' ? audioCtx.resume() : Promise.resolve();
+        })
+        .then(function() {
+          var dest = audioCtx.createMediaStreamDestination();
+          analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+
+          // Connect mic
+          var micSrc = audioCtx.createMediaStreamSource(audioOnlyStream);
+          micSrc.connect(dest); micSrc.connect(analyser);
+
+          // Connect system audio if captured and user checked "Share audio"
+          var hasSysAudio = false;
+          if (audioDisplayStream) {
+            var sysAudioTracks = audioDisplayStream.getAudioTracks();
+            if (sysAudioTracks.length > 0) {
+              var sysOnlyStream = new MediaStream(sysAudioTracks);
+              var sysSrc = audioCtx.createMediaStreamSource(sysOnlyStream);
+              sysSrc.connect(dest); sysSrc.connect(analyser);
+              hasSysAudio = true;
+              console.log('[audio-rec] system audio connected — call recording active');
+            } else {
+              // Picker shown but audio checkbox was not checked
+              audioDisplayStream.getTracks().forEach(function(t){t.stop();});
+              audioDisplayStream = null;
+              console.warn('[audio-rec] no audio tracks from getDisplayMedia — "Share audio" not checked?');
+              showError('System audio not captured. In the screen picker, make sure to check "Share audio". Recording with microphone only.');
+            }
+          }
+
+          $('waveformMeta').textContent = hasSysAudio ? 'Microphone + System Audio' : 'Microphone';
+
+          recordedChunks = []; recordedBlob = null;
+          if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; }
+          var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+          console.log('[audio-rec] mimeType:', mimeType);
+          mediaRecorder = new MediaRecorder(dest.stream, { mimeType: mimeType });
+          mediaRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+          mediaRecorder.onstop = function() {
+            recordingDuration = isPaused ? pausedElapsed / 1000 : (Date.now() - startTime) / 1000;
+            recordedBlob = new Blob(recordedChunks, { type: mimeType.split(';')[0] });
+            recordedBlobUrl = URL.createObjectURL(recordedBlob);
+            cleanupAudioRecording();
+            showAudioTrimView();
+          };
+          mediaRecorder.start(1000);
+          showView('viewAudioRecording');
+          isPaused = false; pausedElapsed = 0; startTime = Date.now();
+          initWaveformBars();
+          updateAudioTimer();
+          timerInterval = setInterval(updateAudioTimer, 250);
+          startWaveformAnimation();
+          window.electronAPI.setRecordingState(true, true);
+        })
+        .catch(function(err) { audioOnlyMode = false; showError('Audio recording failed: ' + err.message); navTo('viewPicker'); });
+    };
+    if (countdownSec > 0) runCountdown(countdownSec, doStart); else doStart();
+  }
+
+  function initWaveformBars() {
+    var container = $('waveformBars'); container.innerHTML = '';
+    for (var i = 0; i < 30; i++) {
+      var bar = document.createElement('div'); bar.className = 'waveform-bar';
+      bar.style.height = '3px'; container.appendChild(bar);
+    }
+  }
+
+  function startWaveformAnimation() {
+    if (!analyser) return;
+    var bars = $('waveformBars').querySelectorAll('.waveform-bar');
+    var binCount = analyser.frequencyBinCount;
+    var data = new Uint8Array(binCount);
+    var binsPerBar = Math.floor(binCount / bars.length);
+    (function tick() {
+      if (!analyser || !audioOnlyMode) return;
+      analyser.getByteFrequencyData(data);
+      var sum = 0;
+      for (var i = 0; i < data.length; i++) sum += data[i];
+      var mf = $('audioMeterFill');
+      if (mf) mf.style.width = Math.min(100, (sum / data.length / 128) * 100) + '%';
+      bars.forEach(function(bar, idx) {
+        var start = idx * binsPerBar, avg = 0;
+        for (var j = start; j < start + binsPerBar; j++) avg += data[j];
+        avg = avg / binsPerBar;
+        bar.style.height = Math.max(3, (avg / 255) * 76) + 'px';
+        bar.style.opacity = String(0.4 + (avg / 255) * 0.6);
+      });
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  function cleanupAudioRecording() {
+    audioOnlyMode = false;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (audioOnlyStream) { audioOnlyStream.getTracks().forEach(function(t){t.stop();}); audioOnlyStream = null; }
+    if (audioDisplayStream) { audioDisplayStream.getTracks().forEach(function(t){t.stop();}); audioDisplayStream = null; }
+    if (audioCtx) { audioCtx.close().catch(function(){}); audioCtx = null; analyser = null; }
+    window.electronAPI.setRecordingState(false);
+  }
+
+  function toggleAudioPause() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    if (isPaused) {
+      mediaRecorder.resume(); isPaused = false; startTime = Date.now() - pausedElapsed;
+      $('btnAudioPause').textContent = 'PAUSE'; $('audioRecDot').classList.remove('paused');
+    } else {
+      mediaRecorder.pause(); isPaused = true; pausedElapsed = Date.now() - startTime;
+      $('btnAudioPause').textContent = 'RESUME'; $('audioRecDot').classList.add('paused');
+    }
+    window.electronAPI.setPauseState(isPaused);
+  }
+
+  function stopAudioRecording() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    mediaRecorder.stop();
+  }
+
+  function updateAudioTimer() {
+    if (isPaused) return;
+    var sec = Math.floor((Date.now() - startTime) / 1000);
+    $('audioTimer').textContent = String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0');
+  }
+
+  // ═══════ AUDIO TRIM ═══════
+  function showAudioTrimView() {
+    showView('viewAudioTrim');
+    var ta = $('trimAudio'); ta.src = recordedBlobUrl;
+    ta.onloadedmetadata = function() {
+      var dur = ta.duration; if (!isFinite(dur) || dur <= 0) dur = recordingDuration;
+      $('audioTrimEnd').max = dur;   $('audioTrimEnd').value = dur;
+      $('audioTrimStart').max = dur; $('audioTrimStart').value = 0;
+      $('audioTrimEndVal').textContent = fmtTime(dur); $('audioTrimStartVal').textContent = '0:00';
+    };
+  }
+
+  // ═══════ AUDIO SAVE ═══════
+  function saveAudioInstant() {
+    writeBlobToTemp().then(function() { return window.electronAPI.saveAudioInstant(); })
+      .then(function(p) { hideConv(); showBanner(p); addToAudioHistory(p, 'webm-audio'); cleanupAfterAudioSave(); })
+      .catch(function(e) { hideConv(); alert('Save failed: ' + e.message); });
+  }
+  function saveAudioTrimmed() {
+    var s = parseFloat($('audioTrimStart').value), e2 = parseFloat($('audioTrimEnd').value);
+    if (e2 <= s) { alert('End must be after start'); return; }
+    writeBlobToTemp()
+      .then(function() { showConv('Trimming audio...'); return window.electronAPI.saveAudioTrimmed({ startSec: s, endSec: e2 }); })
+      .then(function(p) { hideConv(); showBanner(p); addToAudioHistory(p, 'webm-audio'); cleanupAfterAudioSave(); })
+      .catch(function(err) { hideConv(); alert('Trim failed: ' + err.message); });
+  }
+  function saveAsMp3() {
+    var s = parseFloat($('audioTrimStart').value), e2 = parseFloat($('audioTrimEnd').value);
+    var maxD = parseFloat($('audioTrimEnd').max), trimmed = s > 0.5 || e2 < (maxD - 0.5);
+    writeBlobToTemp()
+      .then(function() { showConv('Exporting MP3...'); return window.electronAPI.saveAsMp3({ startSec: s, endSec: e2, trimmed: trimmed }); })
+      .then(function(p) { hideConv(); showBanner(p); addToAudioHistory(p, 'mp3'); cleanupAfterAudioSave(); })
+      .catch(function(err) { hideConv(); alert('MP3 failed: ' + err.message); });
+  }
+  function saveAsM4a() {
+    var s = parseFloat($('audioTrimStart').value), e2 = parseFloat($('audioTrimEnd').value);
+    var maxD = parseFloat($('audioTrimEnd').max), trimmed = s > 0.5 || e2 < (maxD - 0.5);
+    writeBlobToTemp()
+      .then(function() { showConv('Exporting M4A...'); return window.electronAPI.saveAsM4a({ startSec: s, endSec: e2, trimmed: trimmed }); })
+      .then(function(p) { hideConv(); showBanner(p); addToAudioHistory(p, 'm4a'); cleanupAfterAudioSave(); })
+      .catch(function(err) { hideConv(); alert('M4A failed: ' + err.message); });
+  }
+  function addToAudioHistory(filePath, format) {
+    window.electronAPI.addHistoryEntry({ filePath: filePath, format: format, duration: recordingDuration, savedAt: new Date().toISOString(), audioOnly: true })
+      .then(function(updated) { historyCache = updated; }).catch(function(){});
+  }
+  function cleanupAfterAudioSave() {
+    recordedChunks = []; recordedBlob = null;
+    if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; }
+    $('trimAudio').src = '';
+    navTo('viewDashboard');
+  }
+  function discardAudioRecording() {
+    recordedChunks = []; recordedBlob = null;
+    if (recordedBlobUrl) { URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; }
+    $('trimAudio').src = ''; window.electronAPI.discardTemp();
+    navTo('viewPicker');
+  }
+  function reAudioRecord() { discardAudioRecording(); setTimeout(function() { startAudioRecording(); }, 300); }
+
   // Support email link
   var emailLink = $('supportEmailLink');
   if (emailLink) {
@@ -1734,12 +2317,29 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
     else if(s.status==='trimming')$('convText').textContent='Trimming...';
   });
   window.electronAPI.onSettingsUpdated(function(s){ applySettingsToUI(s); $('outputPath').textContent=s.outputDir; });
-  window.electronAPI.onToggleRecord(function(){if(selectedSource&&currentView==='viewPicker')startRecording();});
-  window.electronAPI.onTogglePause(function(){togglePause();});
-  window.electronAPI.onStop(function(){stopRecording();});
+  window.electronAPI.onHistoryChanged(function(history) {
+    historyCache = history || [];
+    if (currentView === 'viewHistory') loadHistory();
+  });
+  window.electronAPI.onToggleRecord(function(){
+    if (currentView === 'viewPicker') {
+      if (pickerMode === 'audio') startAudioRecording();
+      else if (selectedSource) startRecording();
+    }
+  });
+  window.electronAPI.onTogglePause(function(){ if (audioOnlyMode) toggleAudioPause(); else togglePause(); });
+  window.electronAPI.onStop(function(){ if (audioOnlyMode) stopAudioRecording(); else stopRecording(); });
   window.electronAPI.onTrayStartRecording(function(){ navTo('viewPicker'); });
   window.electronAPI.onTrayNavigateTo(function(viewId){ navTo(viewId); });
-  window.electronAPI.onTrayApplyPreset(function(preset){ applyPreset(preset); navTo('viewPicker'); });
+  window.electronAPI.onTrayApplyPreset(function(preset){
+    applyPreset(preset);
+    if (preset.audioOnly) {
+      // Audio-only from tray: skip picker, go straight to recording
+      startAudioRecording();
+    } else {
+      navTo('viewPicker');
+    }
+  });
 
 })();
 </script>

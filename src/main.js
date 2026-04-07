@@ -123,9 +123,10 @@ let settings = {
   cursorFxColor: 'yellow', // yellow | white | cyan | red
   defaultPresetId: '',     // preset ID to auto-apply on picker open
   presets: [
-    { id: 'default-tutorial',      name: 'Tutorial',      quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false },
-    { id: 'default-demo',          name: 'Quick Demo',    quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false },
-    { id: 'default-presentation',  name: 'Presentation',  quality: 'high',   fps: 30, countdown: 5, cam: false, mic: true,  sysAudio: true  }
+    { id: 'default-tutorial',      name: 'Tutorial',         quality: 'high',   fps: 30, countdown: 3, cam: true,  mic: true,  sysAudio: false, audioOnly: false },
+    { id: 'default-demo',          name: 'Quick Demo',       quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false, audioOnly: false },
+    { id: 'default-presentation',  name: 'Presentation',     quality: 'high',   fps: 30, countdown: 5, cam: false, mic: true,  sysAudio: true,  audioOnly: false },
+    { id: 'default-audio',         name: 'Audio Recording',  quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true,  sysAudio: false, audioOnly: true  }
   ]
 };
 
@@ -141,6 +142,19 @@ function loadPersistedSettings() {
       Object.assign(settings, saved);
     }
   } catch (e) { console.log('[main] settings load error:', e.message); }
+  // Migration: ensure built-in default presets that may be missing from older settings.json
+  const builtins = [
+    { id: 'default-audio', name: 'Audio Recording', quality: 'medium', fps: 30, countdown: 0, cam: false, mic: true, sysAudio: false, audioOnly: true }
+  ];
+  if (!settings.presets) settings.presets = [];
+  let changed = false;
+  builtins.forEach(function(bp) {
+    if (!settings.presets.find(function(p) { return p.id === bp.id; })) {
+      settings.presets.push(bp); changed = true;
+      console.log('[main] migrated default preset:', bp.name);
+    }
+  });
+  if (changed) savePersistedSettings();
 }
 
 function savePersistedSettings() {
@@ -151,6 +165,11 @@ function ts(ext) {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `AIXplore-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s.${ext}`;
+}
+function tsAudio(ext) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `AIXplore-Audio-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}m${p(d.getSeconds())}s.${ext}`;
 }
 function ensureDir() { if (!fs.existsSync(settings.outputDir)) fs.mkdirSync(settings.outputDir, { recursive: true }); }
 
@@ -167,11 +186,19 @@ function isValidOutputPath(p) {
   return resolved.startsWith(settings.outputDir);
 }
 
-// Validate a history file path: must be a known AIXplore recording filename
+// Validate a history file path: must be within outputDir with a known extension
 function isValidHistoryFilePath(p) {
   if (!p || typeof p !== 'string') return false;
-  const base = path.basename(p);
-  return /^AIXplore-\d{4}-\d{2}-\d{2}_\d{2}h\d{2}m\d{2}s\.(webm|mp4)$/.test(base);
+  const resolved = path.resolve(p);
+  if (!resolved.startsWith(path.resolve(settings.outputDir))) return false;
+  return /\.(webm|mp4|mp3|m4a)$/.test(path.basename(resolved));
+}
+
+// Validate a new filename stem for rename (no slashes, no null bytes, non-empty)
+function isValidRenameStem(stem) {
+  if (!stem || typeof stem !== 'string') return false;
+  const trimmed = stem.trim();
+  return trimmed.length > 0 && !/[/\0]/.test(trimmed);
 }
 
 function sanitizeNumber(val) {
@@ -265,8 +292,16 @@ function updateTrayMenu() {
     template.push({ label: isPausedRecording ? '▶  Resume Recording' : '⏸  Pause Recording',
                     click: () => sendToWindow('shortcut-toggle-pause') });
   } else {
-    template.push({ label: '●  Start Recording',
+    template.push({ label: '🎥  Video + Audio',
                     click: () => { showMainWindow(); sendToWindow('tray-start-recording'); } });
+    template.push({ label: '🎙  Audio Only',
+                    click: () => {
+                      showMainWindow();
+                      sendToWindow('tray-apply-preset', (settings.presets || []).find(p => p.audioOnly) || {
+                        id: 'default-audio', name: 'Audio Recording', quality: 'medium',
+                        fps: 30, countdown: 0, cam: false, mic: true, sysAudio: false, audioOnly: true
+                      });
+                    } });
     // Presets submenu
     const presets = settings.presets || [];
     if (presets.length > 0) {
@@ -274,7 +309,7 @@ function updateTrayMenu() {
       template.push({
         label: 'Presets',
         submenu: presets.map(p => ({
-          label: p.name,
+          label: (p.audioOnly ? '🎙 ' : '🎥 ') + p.name,
           click: () => { showMainWindow(); sendToWindow('tray-apply-preset', p); }
         }))
       });
@@ -333,12 +368,25 @@ ipcMain.handle('get-sources', async () => {
   } catch (err) { console.error('[main] getSources error:', err); return []; }
 });
 
-ipcMain.on('set-recording-state', (_, on) => {
+// Returns the first physical screen source ID — used by audio-only mode to
+// force loopback on Screen 1 instead of a stale window selectedSourceId
+ipcMain.handle('get-primary-screen-id', async () => {
+  try {
+    const screens = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
+    console.log('[main] get-primary-screen-id: found', screens.length, 'screen(s):', screens.map(s => s.name));
+    return screens.length > 0 ? screens[0].id : null;
+  } catch (err) {
+    console.error('[main] get-primary-screen-id error:', err);
+    return null;
+  }
+});
+
+ipcMain.on('set-recording-state', (_, on, audioOnly) => {
   isRecording = on;
   if (!on) isPausedRecording = false;
   setTrayRec(on);
   updateTrayMenu();
-  if (on) {
+  if (on && !audioOnly) {
     const windowMatch = selectedSourceId && selectedSourceId.match(/^window:(\d+)/);
     if (windowMatch) {
       queryWindowBounds(parseInt(windowMatch[1])).then(bounds => {
@@ -350,7 +398,7 @@ ipcMain.on('set-recording-state', (_, on) => {
       recordingSourceBounds = null;
       startClickCapture(); startCursorPoll();
     }
-  } else {
+  } else if (!on) {
     stopClickCapture(); stopCursorPoll();
   }
 });
@@ -372,6 +420,7 @@ ipcMain.handle('set-settings', (_, s) => {
   if (s && typeof s.cursorFxSize === 'string') settings.cursorFxSize = s.cursorFxSize;
   if (s && typeof s.cursorFxColor === 'string') settings.cursorFxColor = s.cursorFxColor;
   if (s && typeof s.defaultPresetId === 'string') settings.defaultPresetId = s.defaultPresetId;
+  if (s && (typeof s.secondaryOutputDir === 'string' || s.secondaryOutputDir === null)) settings.secondaryOutputDir = s.secondaryOutputDir;
   savePersistedSettings();
   return settings;
 });
@@ -381,8 +430,40 @@ ipcMain.handle('choose-output-dir', async () => {
     settings.outputDir = r.filePaths[0];
     savePersistedSettings();
     sendToWindow('settings-updated', settings);
+    startDirWatcher();
     return settings.outputDir;
   }
+  return null;
+});
+
+// ─── Secondary output copy ───
+function copyToSecondaryDir(savedPath) {
+  try {
+    const dir = settings.secondaryOutputDir;
+    if (!dir || typeof dir !== 'string') return;
+    if (!fs.existsSync(dir)) return;
+    const dest = path.join(dir, path.basename(savedPath));
+    if (fs.existsSync(dest)) return;
+    fs.copyFileSync(savedPath, dest);
+    console.log('[main] secondary copy:', dest);
+  } catch (e) { console.warn('[main] secondary copy failed:', e.message); }
+}
+
+ipcMain.handle('choose-secondary-dir', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (!r.canceled && r.filePaths[0]) {
+    settings.secondaryOutputDir = r.filePaths[0];
+    savePersistedSettings();
+    sendToWindow('settings-updated', settings);
+    return r.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('clear-secondary-dir', () => {
+  settings.secondaryOutputDir = null;
+  savePersistedSettings();
+  sendToWindow('settings-updated', settings);
   return null;
 });
 
@@ -391,7 +472,7 @@ ipcMain.handle('save-webm-instant', async (_, tempPath) => {
   if (!isValidTempPath(tempPath)) throw new Error('Invalid temp file path');
   ensureDir(); const out = path.join(settings.outputDir, ts('webm'));
   fs.copyFileSync(tempPath, out); try { fs.unlinkSync(tempPath); } catch(e) {}
-  console.log('[main] saved:', out); return out;
+  console.log('[main] saved:', out); copyToSecondaryDir(out); return out;
 });
 
 // ─── Save: trimmed WebM ───
@@ -407,7 +488,7 @@ ipcMain.handle('save-webm-trimmed', async (_, opts) => {
       { timeout: 120000 }, (err) => {
         try { fs.unlinkSync(opts.tempPath); } catch(e) {}
         if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-        else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+        else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
       });
   });
 });
@@ -430,7 +511,87 @@ ipcMain.handle('save-as-mp4', async (_, opts) => {
     const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
       try { fs.unlinkSync(opts.tempPath); } catch(e) {}
       if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
-      else { sendToWindow('conversion-status', { status: 'done' }); resolve(out); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
+});
+
+// ─── Save: audio-only instant WebM ───
+ipcMain.handle('save-audio-instant', async (_, tempPath) => {
+  if (!isValidTempPath(tempPath)) throw new Error('Invalid temp file path');
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('webm'));
+  fs.copyFileSync(tempPath, out); try { fs.unlinkSync(tempPath); } catch(e) {}
+  console.log('[main] saved audio:', out); copyToSecondaryDir(out); return out;
+});
+
+// ─── Save: audio-only trimmed WebM ───
+ipcMain.handle('save-audio-trimmed', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const duration = sanitizeNumber(opts.endSec) - startSec;
+  if (duration <= 0) throw new Error('Invalid trim range');
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('webm'));
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'trimming' });
+    execFile(ffmpegPath, ['-y', '-i', opts.tempPath, '-ss', String(startSec), '-t', String(duration), '-c', 'copy', out],
+      { timeout: 120000 }, (err) => {
+        try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+        if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+        else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
+      });
+  });
+});
+
+// ─── Save: MP3 ───
+ipcMain.handle('convert-to-mp3', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const endSec   = sanitizeNumber(opts.endSec);
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('mp3'));
+  const args = ['-y', '-i', opts.tempPath];
+  if (opts.trimmed) {
+    const duration = endSec - startSec;
+    if (duration <= 0) throw new Error('Invalid trim range');
+    args.push('-ss', String(startSec), '-t', String(duration));
+  }
+  args.push('-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100', out);
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
+});
+
+// ─── Save: M4A ───
+ipcMain.handle('convert-to-m4a', async (_, opts) => {
+  if (!isValidTempPath(opts.tempPath)) throw new Error('Invalid temp file path');
+  const startSec = sanitizeNumber(opts.startSec);
+  const endSec   = sanitizeNumber(opts.endSec);
+  ensureDir(); const out = path.join(settings.outputDir, tsAudio('m4a'));
+  const args = ['-y', '-i', opts.tempPath];
+  if (opts.trimmed) {
+    const duration = endSec - startSec;
+    if (duration <= 0) throw new Error('Invalid trim range');
+    args.push('-ss', String(startSec), '-t', String(duration));
+  }
+  args.push('-vn', '-acodec', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      try { fs.unlinkSync(opts.tempPath); } catch(e) {}
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); }
+      else { sendToWindow('conversion-status', { status: 'done' }); copyToSecondaryDir(out); resolve(out); }
     });
     if (proc.stderr) proc.stderr.on('data', (d) => {
       const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
@@ -448,33 +609,110 @@ ipcMain.handle('open-file', (_, p) => {
   return shell.openPath(p);
 });
 
-// ─── History ───
-ipcMain.handle('get-history', () => {
-  try { return JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) { return []; }
+// ─── Convert existing history file (WebM → MP4 / MP3 / M4A) ───
+ipcMain.handle('convert-history-file', async (_, opts) => {
+  if (!isValidHistoryFilePath(opts.filePath)) throw new Error('Invalid file path');
+  const format = ['mp4', 'mp3', 'm4a'].includes(opts.format) ? opts.format : null;
+  if (!format) throw new Error('Invalid format');
+
+  const dir = path.dirname(opts.filePath);
+  const base = path.basename(opts.filePath, path.extname(opts.filePath));
+  const out = path.join(dir, base + '.' + format);
+
+  const args = ['-y', '-i', opts.filePath];
+  if (format === 'mp4') {
+    args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out);
+  } else if (format === 'mp3') {
+    args.push('-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-ar', '44100', out);
+  } else if (format === 'm4a') {
+    args.push('-vn', '-acodec', 'aac', '-b:a', '192k', '-movflags', '+faststart', out);
+  }
+
+  return new Promise((resolve, reject) => {
+    sendToWindow('conversion-status', { status: 'converting' });
+    const proc = execFile(ffmpegPath, args, { timeout: 300000 }, (err) => {
+      if (err) { sendToWindow('conversion-status', { status: 'error', error: err.message }); reject(err); return; }
+      sendToWindow('conversion-status', { status: 'done' });
+      if (opts.mode === 'replace') { try { fs.unlinkSync(opts.filePath); } catch(e) {} }
+      copyToSecondaryDir(out);
+      resolve({ outPath: out, replaced: opts.mode === 'replace' });
+    });
+    if (proc.stderr) proc.stderr.on('data', (d) => {
+      const m = d.toString().match(/time=(\d+):(\d+):(\d+)/);
+      if (m) sendToWindow('conversion-status', { status: 'converting', progress: +m[1]*3600 + +m[2]*60 + +m[3] });
+    });
+  });
 });
 
+// ─── History helpers ───
+function loadHistory() {
+  try { return JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) { return []; }
+}
+function saveHistory(history) {
+  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+}
+
+ipcMain.handle('get-history', () => loadHistory());
+
 ipcMain.handle('add-history-entry', (_, entry) => {
-  let history = [];
-  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
-  // Get file size server-side
+  const history = loadHistory();
   let fileSize = 0;
   try { fileSize = fs.statSync(entry.filePath).size; } catch (e) {}
-  const full = { ...entry, fileSize, savedAt: entry.savedAt || new Date().toISOString() };
-  history.unshift(full);
-  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
+  history.unshift({ ...entry, fileSize, savedAt: entry.savedAt || new Date().toISOString() });
+  saveHistory(history);
   return history;
 });
 
 ipcMain.handle('delete-history-entry', (_, filePath) => {
-  let history = [];
-  try { history = JSON.parse(fs.readFileSync(getHistoryPath(), 'utf8')); } catch (e) {}
-  history = history.filter(e => e.filePath !== filePath);
-  try { fs.writeFileSync(getHistoryPath(), JSON.stringify(history, null, 2)); } catch (e) {}
-  // Attempt to delete file if it's a valid AIXplore recording
+  const history = loadHistory().filter(e => e.filePath !== filePath);
+  saveHistory(history);
   if (isValidHistoryFilePath(filePath)) {
     try { fs.unlinkSync(filePath); } catch (e) {}
   }
   return history;
+});
+
+ipcMain.handle('delete-history-entries', (_, filePaths) => {
+  if (!Array.isArray(filePaths)) throw new Error('Expected array of file paths');
+  const pathSet = new Set(filePaths);
+  const history = loadHistory().filter(e => !pathSet.has(e.filePath));
+  saveHistory(history);
+  filePaths.forEach(fp => { if (isValidHistoryFilePath(fp)) { try { fs.unlinkSync(fp); } catch (e) {} } });
+  return history;
+});
+
+ipcMain.handle('choose-export-dir', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (!r.canceled && r.filePaths[0]) return r.filePaths[0];
+  return null;
+});
+
+ipcMain.handle('export-recordings', (_, opts) => {
+  if (!opts || !Array.isArray(opts.filePaths) || !opts.destDir) throw new Error('Invalid export options');
+  const destDir = opts.destDir;
+  if (!fs.existsSync(destDir)) throw new Error('Destination folder does not exist');
+  let exported = 0, skipped = 0, errors = 0;
+  opts.filePaths.forEach(fp => {
+    if (!isValidHistoryFilePath(fp)) { errors++; return; }
+    const dest = path.join(destDir, path.basename(fp));
+    if (fs.existsSync(dest)) { skipped++; return; }
+    try { fs.copyFileSync(fp, dest); exported++; } catch (e) { errors++; }
+  });
+  return { exported, skipped, errors };
+});
+
+// ─── Rename history file ───
+ipcMain.handle('rename-history-file', (_, { oldPath, newStem }) => {
+  if (!isValidHistoryFilePath(oldPath)) throw new Error('Invalid file path');
+  if (!isValidRenameStem(newStem)) throw new Error('Invalid file name');
+  const newPath = path.join(path.dirname(oldPath), newStem.trim() + path.extname(oldPath));
+  if (newPath === oldPath) return oldPath;
+  if (fs.existsSync(newPath)) throw new Error('A file with that name already exists');
+  fs.renameSync(oldPath, newPath);
+  const history = loadHistory();
+  const idx = history.findIndex(e => e.filePath === oldPath);
+  if (idx !== -1) { history[idx] = { ...history[idx], filePath: newPath }; saveHistory(history); }
+  return newPath;
 });
 
 ipcMain.handle('open-system-pref', (_, url) => {
@@ -523,6 +761,45 @@ ipcMain.handle('history-open-file', (_, p) => {
   return shell.openPath(p);
 });
 
+// ─── Output directory watcher (detects on-disk renames) ───
+let dirWatcher = null;
+let watcherDebounce = null;
+function startDirWatcher() {
+  if (dirWatcher) { try { dirWatcher.close(); } catch (e) {} dirWatcher = null; }
+  const watchDir = settings.outputDir;
+  if (!watchDir || !fs.existsSync(watchDir)) return;
+  try {
+    dirWatcher = fs.watch(watchDir, (eventType, filename) => {
+      if (eventType !== 'rename' || !filename) return;
+      clearTimeout(watcherDebounce);
+      watcherDebounce = setTimeout(() => {
+        const history = loadHistory();
+        const missing = history.filter(e =>
+          path.dirname(e.filePath) === watchDir && !fs.existsSync(e.filePath)
+        );
+        if (missing.length === 0) return;
+        let diskFiles;
+        try { diskFiles = fs.readdirSync(watchDir); } catch (e) { return; }
+        const historyPaths = new Set(history.map(e => e.filePath));
+        const newFiles = diskFiles
+          .map(f => path.join(watchDir, f))
+          .filter(fp => !historyPaths.has(fp) && /\.(webm|mp4|mp3|m4a)$/.test(fp));
+        let changed = false;
+        for (const entry of missing) {
+          const ext = path.extname(entry.filePath);
+          const matchIdx = newFiles.findIndex(fp => path.extname(fp) === ext);
+          if (matchIdx !== -1) {
+            const idx = history.findIndex(e => e.filePath === entry.filePath);
+            if (idx !== -1) { history[idx] = { ...history[idx], filePath: newFiles[matchIdx] }; changed = true; }
+            newFiles.splice(matchIdx, 1);
+          }
+        }
+        if (changed) { saveHistory(history); sendToWindow('history-changed', history); }
+      }, 150);
+    });
+  } catch (e) { console.log('[watcher] failed to watch', watchDir, e.message); }
+}
+
 function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+R', () => sendToWindow('shortcut-toggle-record'));
   globalShortcut.register('CommandOrControl+Shift+P', () => sendToWindow('shortcut-toggle-pause'));
@@ -532,6 +809,7 @@ function registerShortcuts() {
 app.whenReady().then(() => {
   userData = app.getPath('userData');
   loadPersistedSettings();
+  startDirWatcher();
   // Set dock icon (applies in dev mode; packaged builds use the .icns automatically)
   if (process.platform === 'darwin' && app.dock) {
     const iconPath = path.join(__dirname, '..', 'assets', 'icon-1024.png');

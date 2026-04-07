@@ -1,19 +1,27 @@
 # AIXplore Recorder — User Guide
 
-This guide covers everything you need to know to record, edit, and export screen recordings with AIXplore Recorder.
+This guide covers everything you need to know to record, edit, and export with AIXplore Recorder — including screen recording and the audio-only recording mode.
 
 ## Table of Contents
 
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
 - [First Launch & Permissions](#first-launch--permissions)
+- [Recording Modes](#recording-modes)
 - [Recording a Screen or Window](#recording-a-screen-or-window)
+- [Audio-Only Recording](#audio-only-recording)
 - [Using the Webcam Overlay](#using-the-webcam-overlay)
 - [Audio Configuration](#audio-configuration)
 - [Recording Controls](#recording-controls)
 - [Trimming Your Recording](#trimming-your-recording)
 - [Exporting & Saving](#exporting--saving)
+- [Recording Presets](#recording-presets)
+- [System Tray](#system-tray)
 - [Settings](#settings)
+- [Bulk Delete](#bulk-delete)
+- [Export to Folder](#export-to-folder)
+- [Auto-Copy on Save](#auto-copy-on-save)
+- [Convert WebM in History](#convert-webm-in-history)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 
@@ -80,6 +88,19 @@ If you miss a prompt, go to **System Settings > Privacy & Security** and enable 
 
 > **Tip:** The app will retry loading screen sources up to 3 times automatically while waiting for the Screen Recording permission to take effect.
 
+## Recording Modes
+
+AIXplore Recorder supports two distinct recording modes, switchable at the top of the source picker:
+
+| Mode | Button | What it captures |
+|---|---|---|
+| **Video + Audio** | 🎥 Video + Audio | Screen or window video + optional mic and system audio |
+| **Audio Only** | 🎙 Audio Only | Microphone only — no screen source required |
+
+You can also start either mode instantly from the **system tray** without opening the main window.
+
+---
+
 ## Recording a Screen or Window
 
 ### Step 1: Select a Source
@@ -106,6 +127,48 @@ Below the source grid, you'll find toggle switches:
 ### Step 3: Start Recording
 
 Click the **Start Recording** button (or press `Ctrl+Shift+R`). If a countdown is set, you'll see a large countdown number overlay before recording begins.
+
+---
+
+## Audio-Only Recording
+
+Audio-only mode captures your microphone without requiring a screen source. Use it for discussions, interviews, voice memos, or any situation where you don't need to record your screen.
+
+### Starting an audio-only recording
+
+**From the picker:**
+1. Click **🎙 Audio Only** at the top of the source picker
+2. The source grid, webcam toggle, system audio toggle, and cursor FX toggle are hidden — they are not applicable in this mode
+3. Confirm the **Mic** toggle is on
+4. Click **Start Audio Recording**
+
+**From the tray:**
+- Click the menu bar icon and select **🎙 Audio Only** — recording starts immediately, no window required
+
+### During recording
+
+The recording view shows a **waveform visualizer** — 30 animated bars driven by live microphone levels — along with a timer and the standard PAUSE / STOP controls.
+
+### System audio in audio-only mode
+
+System audio loopback is **not available** in audio-only mode. Loopback requires a screen capture session (macOS constraint). If you need to record both your mic and what you hear through your speakers (e.g. a phone or video call), use **Video + Audio** mode with both **Mic** and **System Audio** toggles on.
+
+> **Teams / video call tip:** To capture both sides of a call, use Video + Audio mode with System Audio ON. The loopback captures your call partner's voice as played through your speakers or headphones — including AirPods.
+
+### Exporting audio-only recordings
+
+After stopping, the **Audio Trim view** offers:
+
+| Button | Description |
+|---|---|
+| **Save WebM (instant)** | Save the full recording as WebM/Opus — fastest option |
+| **Save Trimmed WebM** | Trim and save as WebM via FFmpeg |
+| **Save as MP3** | Export as 192k MP3 — widely compatible |
+| **Save as M4A** | Export as 192k AAC in M4A container |
+
+All audio files are saved with the prefix `AIXplore-Audio-YYYY-MM-DD_HHhMMmSSs`.
+
+---
 
 ## Using the Webcam Overlay
 
@@ -171,7 +234,7 @@ After stopping a recording, you are taken to the **Trim View**:
 
 ## Exporting & Saving
 
-The trim view offers five actions:
+### Video recordings (trim view)
 
 | Button | Description |
 |---|---|
@@ -181,13 +244,27 @@ The trim view offers five actions:
 | **Save Trimmed** | Save only the trimmed portion as WebM using FFmpeg |
 | **Save as MP4** | Convert to MP4 (H.264 + AAC) using FFmpeg. Applies trim if set. |
 
+### Audio recordings (audio trim view)
+
+| Button | Description |
+|---|---|
+| **Discard** | Delete the recording and return to the picker |
+| **Re-record** | Discard and immediately start a new audio recording |
+| **Save WebM (instant)** | Save the full recording as WebM/Opus without re-encoding |
+| **Save Trimmed WebM** | Trim and save as WebM |
+| **Save as MP3** | Export as 192k MP3 via FFmpeg |
+| **Save as M4A** | Export as 192k AAC in M4A container via FFmpeg |
+
 ### File Naming
 
-All recordings are saved with an automatic filename:
+All recordings are saved with automatic filenames:
 
 ```
-AIXplore-YYYY-MM-DD_HHhMMmSSs.webm
-AIXplore-YYYY-MM-DD_HHhMMmSSs.mp4
+AIXplore-YYYY-MM-DD_HHhMMmSSs.webm      ← video recording
+AIXplore-YYYY-MM-DD_HHhMMmSSs.mp4       ← video recording
+AIXplore-Audio-YYYY-MM-DD_HHhMMmSSs.webm ← audio-only recording
+AIXplore-Audio-YYYY-MM-DD_HHhMMmSSs.mp3  ← audio-only recording
+AIXplore-Audio-YYYY-MM-DD_HHhMMmSSs.m4a  ← audio-only recording
 ```
 
 ### After Saving
@@ -196,6 +273,47 @@ A banner appears at the bottom of the window showing the saved file path with tw
 
 - **Show in Finder** — Opens the containing folder in Finder
 - **Play** — Opens the file in your default video player
+
+## Recording Presets
+
+Presets let you save your current configuration as a named profile and apply it in one click from the picker or tray.
+
+### Built-in presets
+
+| Preset | Mode | Settings |
+|---|---|---|
+| Tutorial | 🎥 Video | High quality, 30fps, 3s countdown, cam + mic |
+| Quick Demo | 🎥 Video | Medium quality, 30fps, no countdown, mic only |
+| Presentation | 🎥 Video | High quality, 30fps, 5s countdown, mic + system audio |
+| Audio Recording | 🎙 Audio Only | Medium quality, no countdown, mic only |
+
+### Creating a custom preset
+
+1. Configure the picker (mode, toggles, countdown) as desired
+2. Click **Save Current as Preset** and give it a name
+3. The preset appears in the selector and in the tray Presets submenu
+
+### Setting a default preset
+
+In **Settings → Presets**, select a preset from the Default dropdown. It is automatically applied each time you open the source picker.
+
+---
+
+## System Tray
+
+Click the menu bar icon to access:
+
+| Item | Action |
+|---|---|
+| **🎥 Video + Audio** | Open the source picker in Video mode |
+| **🎙 Audio Only** | Start an audio-only recording immediately |
+| **Presets submenu** | Apply any preset — 🎥 video presets open the picker, 🎙 audio presets start recording directly |
+| **■ Stop Recording** | Stop the active recording (shown during recording) |
+| **⏸ Pause / ▶ Resume** | Pause or resume (shown during recording) |
+| **Cursor FX** | Toggle click spotlight on/off |
+| **Settings…** | Open the settings page |
+
+---
 
 ## Settings
 
@@ -212,6 +330,95 @@ The directory is created automatically if it doesn't exist.
 ### Auto-Save
 
 When enabled in settings, recordings are saved automatically without showing the trim view.
+
+## Bulk Delete
+
+Delete multiple recordings at once from the History view.
+
+1. Open the **History** view from the sidebar
+2. Click the **Select** button in the toolbar (top right)
+3. Check individual recordings or click **Select All** in the action bar
+4. A floating action bar appears at the bottom showing the count of selected items
+5. Click **Delete (N)** to remove all selected recordings
+6. Confirm the deletion in the dialog — files are permanently removed from disk
+7. Click **Cancel** to exit select mode without deleting
+
+---
+
+## Export to Folder
+
+Copy selected recordings to another folder without removing them from the original location.
+
+1. Enter select mode by clicking **Select** in the History toolbar
+2. Check the recordings you want to export
+3. Click **Export (N)** in the action bar
+4. Choose a destination folder in the file picker
+5. The app copies each selected file to the destination — existing files with the same name are skipped
+6. A summary shows how many files were exported, skipped, or not found
+
+---
+
+## Auto-Copy on Save
+
+Automatically copy every new recording to a secondary folder as soon as it is saved. Useful for syncing recordings to a shared drive, backup folder, or cloud-synced directory.
+
+### Setting up
+
+1. Open **Settings** from the sidebar
+2. Under **Output**, find **Secondary Output Folder**
+3. Click **Choose...** and select the target folder
+4. The path is displayed next to the label
+
+### How it works
+
+- Every time a recording is saved (any format — WebM, MP4, MP3, M4A), a copy is automatically placed in the secondary folder
+- If the secondary folder does not exist or is unreachable, the copy is silently skipped — the primary save always succeeds
+- Files with the same name already in the secondary folder are not overwritten
+
+### Removing the secondary folder
+
+Click **Clear** next to the path to disable auto-copy.
+
+---
+
+## Rename a Recording
+
+Give any recording a meaningful name directly from the History view — without leaving the app.
+
+### How to rename
+
+1. Open the **History** view from the sidebar
+2. Hover over a recording row — a **✏️** button appears in the actions area
+3. Click **✏️** to enter rename mode — the filename becomes an editable text input (extension is preserved automatically)
+4. Type the new name, then:
+   - Press **Enter** or click **✓** to confirm
+   - Press **Escape** or click **✗** to cancel
+5. The file is renamed on disk and History updates immediately
+
+### Auto-detect renames from Finder
+
+If you rename a recording directly in Finder or another app, AIXplore Recorder detects the change automatically and updates the History entry — no manual refresh needed.
+
+---
+
+## Convert WebM in History
+
+Convert any saved WebM recording to MP4, MP3, or M4A directly from the History view — no need to re-record.
+
+- **Video WebM** rows show a **→ MP4** button
+- **Audio WebM** rows show **→ MP3** and **→ M4A** buttons
+
+### Steps
+
+1. Open the **History** view from the sidebar
+2. Find the WebM recording you want to convert
+3. Click **→ MP4**, **→ MP3**, or **→ M4A**
+4. A dialog asks: **Keep original WebM?**
+   - **OK** — converts and keeps the original WebM (both files in History)
+   - **Cancel** — converts and replaces the original WebM
+5. The converted file is added to History and auto-copied to your secondary folder if configured
+
+---
 
 ## Keyboard Shortcuts
 

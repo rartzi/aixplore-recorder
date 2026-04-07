@@ -12,7 +12,8 @@ try {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     getSources: function() { return ipcRenderer.invoke('get-sources'); },
-    setRecordingState: function(on) { ipcRenderer.send('set-recording-state', on); },
+    getPrimaryScreenId: function() { return ipcRenderer.invoke('get-primary-screen-id'); },
+    setRecordingState: function(on, audioOnly) { ipcRenderer.send('set-recording-state', on, audioOnly || false); },
     setSelectedSource: function(id) { ipcRenderer.send('set-selected-source', id); },
     getSettings: function() { return ipcRenderer.invoke('get-settings'); },
     setSettings: function(s) { return ipcRenderer.invoke('set-settings', s); },
@@ -48,6 +49,10 @@ try {
     saveWebmInstant: function() { return ipcRenderer.invoke('save-webm-instant', _tempPath); },
     saveWebmTrimmed: function(opts) { return ipcRenderer.invoke('save-webm-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
     saveAsMp4: function(opts) { return ipcRenderer.invoke('save-as-mp4', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAudioInstant: function() { return ipcRenderer.invoke('save-audio-instant', _tempPath); },
+    saveAudioTrimmed: function(opts) { return ipcRenderer.invoke('save-audio-trimmed', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec }); },
+    saveAsMp3: function(opts) { return ipcRenderer.invoke('convert-to-mp3', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
+    saveAsM4a: function(opts) { return ipcRenderer.invoke('convert-to-m4a', { tempPath: _tempPath, startSec: opts.startSec, endSec: opts.endSec, trimmed: opts.trimmed }); },
 
     showInFinder: function(p) { return ipcRenderer.invoke('show-in-finder', p); },
     openFile: function(p) { return ipcRenderer.invoke('open-file', p); },
@@ -66,6 +71,12 @@ try {
     getHistory: function() { return ipcRenderer.invoke('get-history'); },
     addHistoryEntry: function(entry) { return ipcRenderer.invoke('add-history-entry', entry); },
     deleteHistoryEntry: function(filePath) { return ipcRenderer.invoke('delete-history-entry', filePath); },
+    deleteHistoryEntries: function(paths) { return ipcRenderer.invoke('delete-history-entries', paths); },
+    convertHistoryFile: function(opts) { return ipcRenderer.invoke('convert-history-file', opts); },
+    chooseExportDir: function() { return ipcRenderer.invoke('choose-export-dir'); },
+    exportRecordings: function(opts) { return ipcRenderer.invoke('export-recordings', opts); },
+    chooseSecondaryDir: function() { return ipcRenderer.invoke('choose-secondary-dir'); },
+    clearSecondaryDir: function() { return ipcRenderer.invoke('clear-secondary-dir'); },
     historyShowInFinder: function(p) { return ipcRenderer.invoke('history-show-in-finder', p); },
     historyOpenFile: function(p) { return ipcRenderer.invoke('history-open-file', p); },
     getFileSize: function(p) { return ipcRenderer.invoke('get-file-size', p); },
@@ -75,7 +86,10 @@ try {
     getPresets: function() { return ipcRenderer.invoke('get-presets'); },
     savePreset: function(p) { return ipcRenderer.invoke('save-preset', p); },
     deletePreset: function(id) { return ipcRenderer.invoke('delete-preset', id); },
-    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); }
+    updatePreset: function(p) { return ipcRenderer.invoke('update-preset', p); },
+
+    renameHistoryFile: function(oldPath, newStem) { return ipcRenderer.invoke('rename-history-file', { oldPath: oldPath, newStem: newStem }); },
+    onHistoryChanged: function(cb) { ipcRenderer.on('history-changed', function(_, h) { cb(h); }); }
   });
 
   console.log('[preload] electronAPI exposed OK');
