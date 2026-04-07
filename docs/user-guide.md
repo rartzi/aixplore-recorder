@@ -390,9 +390,7 @@ Give any recording a meaningful name directly from the History view — without 
 1. Open the **History** view from the sidebar
 2. Hover over a recording row — a **✏️** button appears in the actions area
 3. Click **✏️** to enter rename mode — the filename becomes an editable text input (extension is preserved automatically)
-4. Type the new name, then:
-   - Press **Enter** or click **✓** to confirm
-   - Press **Escape** or click **✗** to cancel
+4. Type the new name, then press **Enter** to save or **Escape** to cancel
 5. The file is renamed on disk and History updates immediately
 
 ### Auto-detect renames from Finder
