@@ -186,12 +186,12 @@ function isValidOutputPath(p) {
   return resolved.startsWith(settings.outputDir);
 }
 
-// Validate a history file path: must be within outputDir with a known extension
+// Validate a history file path: known extension, absolute, no traversal
 function isValidHistoryFilePath(p) {
   if (!p || typeof p !== 'string') return false;
-  const resolved = path.resolve(p);
-  if (!resolved.startsWith(path.resolve(settings.outputDir))) return false;
-  return /\.(webm|mp4|mp3|m4a)$/.test(path.basename(resolved));
+  if (p.includes('..')) return false;
+  if (!path.isAbsolute(p)) return false;
+  return /\.(webm|mp4|mp3|m4a)$/.test(path.basename(p));
 }
 
 // Validate a new filename stem for rename (no slashes, no null bytes, non-empty)

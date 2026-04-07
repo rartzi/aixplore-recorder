@@ -1049,8 +1049,8 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
       actionsDiv.querySelectorAll('[data-action]').forEach(function(btn) {
         btn.addEventListener('click', function(ev) {
           if (btn.dataset.action === 'rename') { ev.stopPropagation(); enterRenameMode(); }
-          else if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(){});
-          else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(){});
+          else if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(e){ alert('Play failed: ' + e.message); });
+          else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(e){ alert('Finder failed: ' + e.message); });
           else if (btn.dataset.action === 'delete') deleteHistoryEntry(filePath, row);
           else if (btn.dataset.action === 'to-mp4') convertHistoryFile(filePath, 'mp4', row, e);
           else if (btn.dataset.action === 'to-mp3') convertHistoryFile(filePath, 'mp3', row, e);
