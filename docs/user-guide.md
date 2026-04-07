@@ -381,6 +381,26 @@ Click **Clear** next to the path to disable auto-copy.
 
 ---
 
+## Rename a Recording
+
+Give any recording a meaningful name directly from the History view — without leaving the app.
+
+### How to rename
+
+1. Open the **History** view from the sidebar
+2. Hover over a recording row — a **✏️** button appears in the actions area
+3. Click **✏️** to enter rename mode — the filename becomes an editable text input (extension is preserved automatically)
+4. Type the new name, then:
+   - Press **Enter** or click **✓** to confirm
+   - Press **Escape** or click **✗** to cancel
+5. The file is renamed on disk and History updates immediately
+
+### Auto-detect renames from Finder
+
+If you rename a recording directly in Finder or another app, AIXplore Recorder detects the change automatically and updates the History entry — no manual refresh needed.
+
+---
+
 ## Convert WebM in History
 
 Convert any saved WebM recording to MP4, MP3, or M4A directly from the History view — no need to re-record.

@@ -1008,6 +1008,20 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
         '<button class="btn-tiny" data-action="cancel">✗</button>';
       input.focus(); input.select();
 
+      function handleRenameAction(ev) {
+        var btn = ev.target.closest('[data-action]');
+        if (!btn) return;
+        if (btn.dataset.action === 'confirm') doConfirm();
+        else if (btn.dataset.action === 'cancel') doCancel();
+      }
+      actionsDiv.addEventListener('click', handleRenameAction);
+
+      function exitRenameMode() {
+        actionsDiv.removeEventListener('click', handleRenameAction);
+        restoreActions();
+      }
+      function restoreActions() { actionsDiv.innerHTML = makeActionsHtml(); bindActions(); }
+
       function doConfirm() {
         var newStem = input.value.trim();
         if (!newStem) { input.classList.add('invalid'); input.focus(); return; }
@@ -1016,32 +1030,26 @@ select.styled { background: var(--surface); color: var(--text); border: 1px soli
           var newName = newPath.split('/').pop();
           stem = newName.slice(0, newName.length - ext.length - 1);
           nameDiv.textContent = newName;
-          restoreActions();
+          exitRenameMode();
         }).catch(function(err) {
+          input.classList.remove('invalid');
           input.classList.add('invalid');
           input.title = err.message;
           input.focus();
         });
       }
-      function doCancel() { nameDiv.textContent = name; restoreActions(); }
-      function restoreActions() { actionsDiv.innerHTML = makeActionsHtml(); bindActions(); }
+      function doCancel() { nameDiv.textContent = name; exitRenameMode(); }
 
       input.addEventListener('keydown', function(ev) {
         if (ev.key === 'Enter') { ev.preventDefault(); doConfirm(); }
         else if (ev.key === 'Escape') { ev.preventDefault(); doCancel(); }
       });
-      actionsDiv.addEventListener('click', function(ev) {
-        var btn = ev.target.closest('[data-action]');
-        if (!btn) return;
-        if (btn.dataset.action === 'confirm') doConfirm();
-        else if (btn.dataset.action === 'cancel') doCancel();
-      }, { once: true });
     }
 
     function bindActions() {
       actionsDiv.querySelectorAll('[data-action]').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          if (btn.dataset.action === 'rename') enterRenameMode();
+        btn.addEventListener('click', function(ev) {
+          if (btn.dataset.action === 'rename') { ev.stopPropagation(); enterRenameMode(); }
           else if (btn.dataset.action === 'play') window.electronAPI.historyOpenFile(filePath).catch(function(){});
           else if (btn.dataset.action === 'finder') window.electronAPI.historyShowInFinder(filePath).catch(function(){});
           else if (btn.dataset.action === 'delete') deleteHistoryEntry(filePath, row);
